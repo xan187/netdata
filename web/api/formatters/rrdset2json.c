@@ -98,6 +98,7 @@ void rrdset2json(RRDSET *st, BUFFER *wb, size_t *dimensions_count, size_t *memor
     unsigned long memory = st->memsize;
 
     size_t dimensions = 0;
+    size_t data_points = 0;
     RRDDIM *rd;
     rrddim_foreach_read(rd, st) {
         if(rrddim_flag_check(rd, RRDDIM_FLAG_HIDDEN) || rrddim_flag_check(rd, RRDDIM_FLAG_OBSOLETE)) continue;
@@ -114,6 +115,7 @@ void rrdset2json(RRDSET *st, BUFFER *wb, size_t *dimensions_count, size_t *memor
         buffer_strcat(wb, "\" }");
 
         dimensions++;
+        data_points += rd->state->page_index->number_of_metrics;
     }
 
     if(dimensions_count) *dimensions_count += dimensions;
@@ -152,8 +154,8 @@ void rrdset2json(RRDSET *st, BUFFER *wb, size_t *dimensions_count, size_t *memor
     }
     buffer_strcat(wb, ",\n\t\t\t\"chart_labels\": {\n");
     chart_labels2json(st, wb, 2);
-    buffer_strcat(wb, "\t\t\t}\n");
-
+    buffer_strcat(wb, "\t\t\t},\n");
+    buffer_sprintf(wb, "\t\t\t\"data_points\": %"PRIu64, data_points);
 
     buffer_sprintf(wb,
             "\n\t\t}"

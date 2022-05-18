@@ -434,6 +434,8 @@ uint8_t pg_cache_punch_hole(struct rrdengine_instance *ctx, struct rrdeng_page_d
     uv_rwlock_rdunlock(&pg_cache->metrics_index.lock);
 
     uv_rwlock_wrlock(&page_index->lock);
+
+    Word_t memory_diff = JudyLMemUsed(page_index->JudyL_array);
     ret = JudyLDel(&page_index->JudyL_array, (Word_t)(descr->start_time / USEC_PER_SEC), PJE0);
     if (unlikely(0 == ret)) {
         uv_rwlock_wrunlock(&page_index->lock);
@@ -449,10 +451,15 @@ uint8_t pg_cache_punch_hole(struct rrdengine_instance *ctx, struct rrdeng_page_d
             memcpy(metric_id, page_index->id, sizeof(uuid_t));
         }
     }
+    memory_diff -= JudyLMemUsed(page_index->JudyL_array);
+    page_index->current_memory_used -= memory_diff;
+    page_index->number_of_metrics -= descr->page_length;
     uv_rwlock_wrunlock(&page_index->lock);
     fatal_assert(1 == ret);
 
     uv_rwlock_wrlock(&pg_cache->pg_cache_rwlock);
+    pg_cache->time_range_memory_used -= memory_diff;
+    pg_cache->number_of_metrics -= descr->page_length;
     ++ctx->stats.pg_cache_deletions;
     --pg_cache->page_descriptors;
     uv_rwlock_wrunlock(&pg_cache->pg_cache_rwlock);
@@ -631,6 +638,11 @@ void pg_cache_insert(struct rrdengine_instance *ctx, struct pg_cache_page_index 
     *PValue = descr;
     ++page_index->page_count;
     pg_cache_add_new_metric_time(page_index, descr);
+    Word_t memory_used_now = JudyLMemUsed(page_index->JudyL_array);
+    pg_cache->time_range_memory_used = pg_cache->time_range_memory_used - page_index->current_memory_used + memory_used_now;
+    page_index->current_memory_used = memory_used_now;
+    page_index->number_of_metrics += descr->page_length;
+    pg_cache->number_of_metrics += descr->page_length;
     uv_rwlock_wrunlock(&page_index->lock);
 
     uv_rwlock_wrlock(&pg_cache->pg_cache_rwlock);
@@ -1151,6 +1163,8 @@ struct pg_cache_page_index *create_page_index(uuid_t *id)
     page_index->prev = NULL;
     page_index->page_count = 0;
     page_index->writers = 0;
+    page_index->current_memory_used = 0;
+    page_index->number_of_metrics = 0;
 
     return page_index;
 }
@@ -1189,6 +1203,11 @@ void init_page_cache(struct rrdengine_instance *ctx)
 
     pg_cache->page_descriptors = 0;
     pg_cache->populated_pages = 0;
+    pg_cache->metrics = 0;
+    pg_cache->extents = 0;
+    pg_cache->extent_memory = 0;
+    pg_cache->time_range_memory_used = 0;
+    pg_cache->number_of_metrics = 0;
     fatal_assert(0 == uv_rwlock_init(&pg_cache->pg_cache_rwlock));
 
     init_metrics_index(ctx);

@@ -101,6 +101,8 @@ struct pg_cache_page_index {
      * It's also written by the data deletion workqueue when data collection is disabled for this metric.
      */
     usec_t latest_time;
+    Word_t current_memory_used;
+    unsigned number_of_metrics;
 
     struct pg_cache_page_index *prev;
 };
@@ -146,8 +148,14 @@ struct page_cache { /* TODO: add statistics */
     struct pg_cache_committed_page_index committed_page_index;
     struct pg_cache_replaceQ replaceQ;
 
-    unsigned page_descriptors;
-    unsigned populated_pages;
+    unsigned page_descriptors;      // TOTAL in timerange index
+    unsigned populated_pages;       // In CACHE
+    unsigned metrics;  // number of metrics
+    unsigned extents;  // number of extents in this page cache
+    uint64_t extent_memory;  // Memory used by all the extents
+    uint64_t time_range_memory_used;    // memory used by timerange judyl arrays
+    uint64_t number_of_metrics;    // Number of metrics
+
 };
 
 extern void pg_cache_wake_up_waiters_unsafe(struct rrdeng_page_descr *descr);

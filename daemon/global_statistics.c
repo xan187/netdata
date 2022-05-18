@@ -618,6 +618,8 @@ static void dbengine_statistics_charts(void) {
             {
                 static RRDSET *st_long_term_pages = NULL;
                 static RRDDIM *rd_total = NULL;
+                static RRDDIM *rd_metrics = NULL;
+                static RRDDIM *rd_extents = NULL;
                 static RRDDIM *rd_insertions = NULL;
                 static RRDDIM *rd_deletions = NULL;
                 static RRDDIM *rd_flushing_pressure_deletions = NULL;
@@ -637,6 +639,8 @@ static void dbengine_statistics_charts(void) {
                         localhost->rrd_update_every,
                         RRDSET_TYPE_LINE);
 
+                    rd_extents = rrddim_add(st_long_term_pages, "extents", NULL, 1, 1, RRD_ALGORITHM_ABSOLUTE);
+                    rd_metrics = rrddim_add(st_long_term_pages, "metrics", NULL, 1, 1, RRD_ALGORITHM_ABSOLUTE);
                     rd_total = rrddim_add(st_long_term_pages, "total", NULL, 1, 1, RRD_ALGORITHM_ABSOLUTE);
                     rd_insertions = rrddim_add(st_long_term_pages, "insertions", NULL, 1, 1, RRD_ALGORITHM_INCREMENTAL);
                     rd_deletions = rrddim_add(st_long_term_pages, "deletions", NULL, -1, 1, RRD_ALGORITHM_INCREMENTAL);
@@ -645,12 +649,42 @@ static void dbengine_statistics_charts(void) {
                 } else
                     rrdset_next(st_long_term_pages);
 
+                rrddim_set_by_pointer(st_long_term_pages, rd_extents, (collected_number)stats_array[38]);
+                rrddim_set_by_pointer(st_long_term_pages, rd_metrics, (collected_number)stats_array[37]);
                 rrddim_set_by_pointer(st_long_term_pages, rd_total, (collected_number)stats_array[2]);
                 rrddim_set_by_pointer(st_long_term_pages, rd_insertions, (collected_number)stats_array[5]);
                 rrddim_set_by_pointer(st_long_term_pages, rd_deletions, (collected_number)stats_array[6]);
                 rrddim_set_by_pointer(
                     st_long_term_pages, rd_flushing_pressure_deletions, (collected_number)stats_array[36]);
                 rrdset_done(st_long_term_pages);
+            }
+
+            {
+                static RRDSET *st_long_term_metrics = NULL;
+                static RRDDIM *rd_points = NULL;
+
+                if (unlikely(!st_long_term_metrics)) {
+                    st_long_term_metrics = rrdset_create_localhost(
+                        "netdata",
+                        "dbengine_metric_statistics",
+                        NULL,
+                        "dbengine",
+                        NULL,
+                        "Netdata dbengine metric statistics",
+                        "pages",
+                        "netdata",
+                        "stats",
+                        132005,
+                        localhost->rrd_update_every,
+                        RRDSET_TYPE_LINE);
+
+                    rd_points = rrddim_add(st_long_term_metrics, "total_points", NULL, 1, 1, RRD_ALGORITHM_ABSOLUTE);
+                } else
+                    rrdset_next(st_long_term_metrics);
+
+                rrddim_set_by_pointer(st_long_term_metrics, rd_points, (collected_number)stats_array[41]);
+
+                rrdset_done(st_long_term_metrics);
             }
 
             // ----------------------------------------------------------------
@@ -792,6 +826,8 @@ static void dbengine_statistics_charts(void) {
                 static RRDSET *st_ram_usage = NULL;
                 static RRDDIM *rd_cached = NULL;
                 static RRDDIM *rd_pinned = NULL;
+                static RRDDIM *rd_judyl = NULL;
+                static RRDDIM *rd_extents = NULL;
                 static RRDDIM *rd_cache_metadata = NULL;
                 static RRDDIM *rd_index_metadata = NULL;
                 static RRDDIM *rd_pages_metadata = NULL;
@@ -819,6 +855,8 @@ static void dbengine_statistics_charts(void) {
                     rd_cache_metadata = rrddim_add(st_ram_usage, "cache metadata", NULL, 1, 1024*1024, RRD_ALGORITHM_ABSOLUTE);
                     rd_pages_metadata = rrddim_add(st_ram_usage, "pages metadata", NULL, 1, 1024*1024, RRD_ALGORITHM_ABSOLUTE);
                     rd_index_metadata = rrddim_add(st_ram_usage, "index metadata", NULL, 1, 1024*1024, RRD_ALGORITHM_ABSOLUTE);
+                    rd_judyl = rrddim_add(st_ram_usage, "timeJudyL", NULL, 1, 1048576, RRD_ALGORITHM_ABSOLUTE);
+                    rd_extents = rrddim_add(st_ram_usage, "extents", NULL, 1, 1048576, RRD_ALGORITHM_ABSOLUTE);
                 } else
                     rrdset_next(st_ram_usage);
 
@@ -841,6 +879,8 @@ static void dbengine_statistics_charts(void) {
                 /* This is an empirical estimation for Judy array indexing and extent structures */
                 index_metadata = pages_on_disk * 58;
 
+                rrddim_set_by_pointer(st_ram_usage, rd_extents, (collected_number)stats_array[40]);
+                rrddim_set_by_pointer(st_ram_usage, rd_judyl, (collected_number)stats_array[39]);
                 rrddim_set_by_pointer(st_ram_usage, rd_cached, cached_pages);
                 rrddim_set_by_pointer(st_ram_usage, rd_pinned, pinned_pages);
                 rrddim_set_by_pointer(st_ram_usage, rd_cache_metadata, cache_metadata);

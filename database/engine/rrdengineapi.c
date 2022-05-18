@@ -94,6 +94,7 @@ void rrdeng_metric_init(RRDDIM *rd)
             *PValue = page_index = create_page_index(&rd->state->metric_uuid);
             page_index->prev = pg_cache->metrics_index.last_page_index;
             pg_cache->metrics_index.last_page_index = page_index;
+            ++pg_cache->metrics;
             uv_rwlock_wrunlock(&pg_cache->metrics_index.lock);
         }
     } else {
@@ -887,7 +888,12 @@ void rrdeng_get_37_statistics(struct rrdengine_instance *ctx, unsigned long long
     array[34] = (uint64_t)global_pg_cache_over_half_dirty_events;
     array[35] = (uint64_t)ctx->stats.flushing_pressure_page_deletions;
     array[36] = (uint64_t)global_flushing_pressure_page_deletions;
-    fatal_assert(RRDENG_NR_STATS == 37);
+    array[37] = (uint64_t)pg_cache->metrics;
+    array[38] = (uint64_t)pg_cache->extents;
+    array[39] = (uint64_t)pg_cache->time_range_memory_used;
+    array[40] = (uint64_t)pg_cache->extent_memory;
+    array[41] = (uint64_t)pg_cache->number_of_metrics;
+    fatal_assert(RRDENG_NR_STATS == 42);
 }
 
 /* Releases reference to page */

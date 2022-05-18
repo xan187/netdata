@@ -322,6 +322,7 @@ static void restore_extent_metadata(struct rrdengine_instance *ctx, struct rrden
             *PValue = page_index = create_page_index(temp_id);
             page_index->prev = pg_cache->metrics_index.last_page_index;
             pg_cache->metrics_index.last_page_index = page_index;
+            ++pg_cache->metrics;
             uv_rwlock_wrunlock(&pg_cache->metrics_index.lock);
         }
 
@@ -337,8 +338,11 @@ static void restore_extent_metadata(struct rrdengine_instance *ctx, struct rrden
 
     extent->number_of_pages = valid_pages;
 
-    if (likely(valid_pages))
+    if (likely(valid_pages)) {
         df_extent_insert(extent);
+        rrd_stat_atomic_add(&pg_cache->extents, 1);
+        rrd_stat_atomic_add(&pg_cache->extent_memory, sizeof(*extent) + count * sizeof(extent->pages[0]));
+    }
     else
         freez(extent);
 }

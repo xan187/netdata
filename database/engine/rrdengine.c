@@ -790,6 +790,8 @@ static int do_flush_pages(struct rrdengine_worker_config* wc, int force, struct 
         pos += descr->page_length;
     }
     df_extent_insert(extent);
+    rrd_stat_atomic_add(&pg_cache->extents, 1);
+    rrd_stat_atomic_add(&pg_cache->extent_memory, sizeof(*extent) + count * sizeof(extent->pages[0]));
 
     switch (compression_algorithm) {
     case RRD_NO_COMPRESSION:
