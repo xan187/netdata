@@ -916,7 +916,7 @@ void aclk_update_retention(struct aclk_database_worker_config *wc, struct aclk_d
     rotate_data.node_id = strdupz(wc->node_id);
 
     time_t now = now_realtime_sec();
-    while (sqlite3_step(res) == SQLITE_ROW) {
+    while (sqlite3_step(res) == SQLITE_ROW && dimension_update_count < ACLK_MAX_DIMENSION_CLEANUP) {
         if (!update_every || update_every != (uint32_t)sqlite3_column_int(res, 1)) {
             if (update_every) {
                 debug(D_ACLK_SYNC, "Update %s for %u oldest time = %ld", wc->host_guid, update_every, start_time);
@@ -1003,8 +1003,12 @@ void aclk_update_retention(struct aclk_database_worker_config *wc, struct aclk_d
     if (!wc->host)
         hostname = get_hostname_by_node_id(wc->node_id);
 
-    log_access("ACLK STA [%s (%s)]: UPDATES %d RETENTION MESSAGE SENT. CHECKED %u DIMENSIONS.  %u DELETED, %u STOPPED COLLECTING",
-               wc->node_id, wc->host ? wc->host->hostname : hostname ? hostname : "N/A", wc->chart_updates, total_checked, total_deleted, total_stopped);
+    if (dimension_update_count < ACLK_MAX_DIMENSION_CLEANUP)
+        log_access("ACLK STA [%s (%s)]: UPDATES %d RETENTION MESSAGE SENT. CHECKED %u DIMENSIONS.  %u DELETED, %u STOPPED COLLECTING",
+                   wc->node_id, wc->host ? wc->host->hostname : hostname ? hostname : "N/A", wc->chart_updates, total_checked, total_deleted, total_stopped);
+    else
+        log_access("ACLK STA [%s (%s)]: UPDATES %d RETENTION MESSAGE NOT SENT. CHECKED %u DIMENSIONS.  %u DELETED, %u STOPPED COLLECTING",
+                   wc->node_id, wc->host ? wc->host->hostname : hostname ? hostname : "N/A", wc->chart_updates, total_checked, total_deleted, total_stopped);
     freez(hostname);
 
 #ifdef NETDATA_INTERNAL_CHECKS
@@ -1017,7 +1021,8 @@ void aclk_update_retention(struct aclk_database_worker_config *wc, struct aclk_d
             rotate_data.interval_durations[i].update_every,
             rotate_data.interval_durations[i].retention);
 #endif
-    aclk_retention_updated(&rotate_data);
+    if (dimension_update_count < ACLK_MAX_DIMENSION_CLEANUP)
+        aclk_retention_updated(&rotate_data);
     freez(rotate_data.node_id);
     freez(rotate_data.interval_durations);
 
