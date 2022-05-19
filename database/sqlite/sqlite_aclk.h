@@ -197,6 +197,7 @@ struct aclk_database_worker_config {
     int node_info_send;
     int chart_pending;
     int chart_reset_count;
+    int retention_running;
     volatile unsigned is_shutting_down;
     volatile unsigned is_orphan;
     struct aclk_database_worker_config  *next;
