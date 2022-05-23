@@ -560,8 +560,6 @@ RRDSET *rrdset_create_custom(
     RRDSET *st = rrdset_find_on_create(host, fullid);
     if (st) {
         int mark_rebuild = 0;
-        rrdset_flag_set(st, RRDSET_FLAG_SYNC_CLOCK);
-        rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_EXPOSED);
         char *old_plugin = NULL, *old_module = NULL, *old_title = NULL, *old_context = NULL,
              *old_title_v = NULL, *old_context_v = NULL, *old_units_v = NULL, *old_units = NULL;
         int rc;
