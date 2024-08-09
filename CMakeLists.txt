@@ -2775,7 +2775,6 @@ install(FILES src/collectors/python.d.plugin/python.d.conf
         DESTINATION usr/lib/netdata/conf.d)
 
 install(FILES
-        src/collectors/python.d.plugin/alarms/alarms.conf
         src/collectors/python.d.plugin/am2320/am2320.conf
         src/collectors/python.d.plugin/anomalies/anomalies.conf
         src/collectors/python.d.plugin/boinc/boinc.conf
@@ -2784,7 +2783,6 @@ install(FILES
         src/collectors/python.d.plugin/dovecot/dovecot.conf
         src/collectors/python.d.plugin/example/example.conf
         src/collectors/python.d.plugin/exim/exim.conf
-        src/collectors/python.d.plugin/gearman/gearman.conf
         src/collectors/python.d.plugin/go_expvar/go_expvar.conf
         src/collectors/python.d.plugin/haproxy/haproxy.conf
         src/collectors/python.d.plugin/monit/monit.conf
@@ -2807,7 +2805,6 @@ install(FILES
         DESTINATION usr/lib/netdata/conf.d/python.d)
 
 install(FILES
-        src/collectors/python.d.plugin/alarms/alarms.chart.py
         src/collectors/python.d.plugin/am2320/am2320.chart.py
         src/collectors/python.d.plugin/anomalies/anomalies.chart.py
         src/collectors/python.d.plugin/boinc/boinc.chart.py
@@ -2816,7 +2813,6 @@ install(FILES
         src/collectors/python.d.plugin/dovecot/dovecot.chart.py
         src/collectors/python.d.plugin/example/example.chart.py
         src/collectors/python.d.plugin/exim/exim.chart.py
-        src/collectors/python.d.plugin/gearman/gearman.chart.py
         src/collectors/python.d.plugin/go_expvar/go_expvar.chart.py
         src/collectors/python.d.plugin/haproxy/haproxy.chart.py
         src/collectors/python.d.plugin/monit/monit.chart.py

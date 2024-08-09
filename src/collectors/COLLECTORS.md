@@ -283,7 +283,7 @@ If you don't see the app/service you'd like to monitor in this list:
 
 - [BOINC](https://github.com/netdata/netdata/blob/master/src/collectors/python.d.plugin/boinc/integrations/boinc.md)
 
-- [Gearman](https://github.com/netdata/netdata/blob/master/src/collectors/python.d.plugin/gearman/integrations/gearman.md)
+- [Gearman](https://github.com/netdata/netdata/blob/master/src/go/plugin/go.d/modules/gearman/integrations/gearman.md)
 
 ### DNS and DHCP Servers
 
@@ -896,8 +896,6 @@ If you don't see the app/service you'd like to monitor in this list:
 - [GitHub API rate limit](https://github.com/netdata/netdata/blob/master/src/go/plugin/go.d/modules/prometheus/integrations/github_api_rate_limit.md)
 
 - [GitHub repository](https://github.com/netdata/netdata/blob/master/src/go/plugin/go.d/modules/prometheus/integrations/github_repository.md)
-
-- [Netdata Agent alarms](https://github.com/netdata/netdata/blob/master/src/collectors/python.d.plugin/alarms/integrations/netdata_agent_alarms.md)
 
 - [python.d changefinder](https://github.com/netdata/netdata/blob/master/src/collectors/python.d.plugin/changefinder/integrations/python.d_changefinder.md)
 
