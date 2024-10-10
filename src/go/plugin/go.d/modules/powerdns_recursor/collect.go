@@ -3,11 +3,7 @@
 package powerdns_recursor
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
@@ -65,36 +61,12 @@ func (r *Recursor) collectStatistics(collected map[string]int64, statistics stat
 }
 
 func (r *Recursor) scrapeStatistics() ([]statisticMetric, error) {
-	req, _ := web.NewHTTPRequestWithPath(r.Request, urlPathLocalStatistics)
+	req, _ := web.NewHTTPRequestWithPath(r.RequestConfig, urlPathLocalStatistics)
 
-	var statistics statisticMetrics
-	if err := r.doOKDecode(req, &statistics); err != nil {
+	var stats statisticMetrics
+	if err := web.DoHTTP(r.httpClient).RequestJSON(req, &stats); err != nil {
 		return nil, err
 	}
 
-	return statistics, nil
-}
-
-func (r *Recursor) doOKDecode(req *http.Request, in interface{}) error {
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(in); err != nil {
-		return fmt.Errorf("error on decoding response from '%s': %v", req.URL, err)
-	}
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
+	return stats, nil
 }

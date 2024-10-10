@@ -119,22 +119,17 @@ bool fd_is_socket(int fd) {
     return true;
 }
 
-bool sock_has_output_error(int fd) {
-    if(fd < 0) {
-        //internal_error(true, "invalid socket %d", fd);
-        return false;
-    }
+#ifdef POLLRDHUP
+bool is_socket_closed(int fd) {
+    if(fd < 0)
+        return true;
 
 //    if(!fd_is_socket(fd)) {
 //        //internal_error(true, "fd %d is not a socket", fd);
 //        return false;
 //    }
 
-    short int errors = POLLERR | POLLHUP | POLLNVAL;
-
-#ifdef POLLRDHUP
-    errors |= POLLRDHUP;
-#endif
+    short int errors = POLLERR | POLLHUP | POLLNVAL | POLLRDHUP;
 
     struct pollfd pfd = {
             .fd = fd,
@@ -149,6 +144,31 @@ bool sock_has_output_error(int fd) {
 
     return ((pfd.revents & errors) || !(pfd.revents & POLLOUT));
 }
+#else
+bool is_socket_closed(int fd) {
+    if(fd < 0)
+        return true;
+
+    char buffer;
+    ssize_t result = recv(fd, &buffer, 1, MSG_PEEK | MSG_DONTWAIT);
+    if (result == 0) {
+        // Connection closed
+        return true;
+    }
+    else if (result < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // No data available, but socket is still open
+            return false;
+        } else {
+            // An error occurred
+            return true;
+        }
+    }
+
+    // Data is available, socket is open
+    return false;
+}
+#endif
 
 int sock_setnonblock(int fd) {
     int flags;
@@ -748,9 +768,9 @@ int listen_sockets_setup(LISTEN_SOCKETS *sockets) {
     }
     else sockets->default_port = (uint16_t)new_port;
 
-    char *s = appconfig_get(sockets->config, sockets->config_section, "bind to", sockets->default_bind_to);
+    const char *s = appconfig_get(sockets->config, sockets->config_section, "bind to", sockets->default_bind_to);
     while(*s) {
-        char *e = s;
+        const char *e = s;
 
         // skip separators, moving both s(tart) and e(nd)
         while(isspace((uint8_t)*e) || *e == ',') s = ++e;
@@ -837,7 +857,15 @@ static inline int connect_to_unix(const char *path, struct timeval *timeout) {
 // service     the service name or port to connect to
 // timeout     the timeout for establishing a connection
 
-int connect_to_this_ip46(int protocol, int socktype, const char *host, uint32_t scope_id, const char *service, struct timeval *timeout) {
+int connect_to_this_ip46(
+    int protocol,
+    int socktype,
+    const char *host,
+    uint32_t scope_id,
+    const char *service,
+    struct timeval *timeout,
+    bool *fallback_ipv4)
+{
     struct addrinfo hints;
     struct addrinfo *ai_head = NULL, *ai = NULL;
 
@@ -869,6 +897,9 @@ int connect_to_this_ip46(int protocol, int socktype, const char *host, uint32_t 
     int fd = -1;
     for (ai = ai_head; ai != NULL && fd == -1; ai = ai->ai_next) {
         if(nd_thread_signaled_to_cancel()) break;
+
+        if (fallback_ipv4 && *fallback_ipv4 && ai->ai_family == PF_INET6)
+            continue;
 
         if (ai->ai_family == PF_INET6) {
             struct sockaddr_in6 *pSadrIn6 = (struct sockaddr_in6 *) ai->ai_addr;
@@ -949,6 +980,9 @@ int connect_to_this_ip46(int protocol, int socktype, const char *host, uint32_t 
 
                             close(fd);
                             fd = -1;
+
+                            if (fallback_ipv4 && ai->ai_family == PF_INET6)
+                                *fallback_ipv4 = true;
                             break;
 
                         default:
@@ -1070,7 +1104,7 @@ int connect_to_this(const char *definition, int default_port, struct timeval *ti
         service = default_service;
 
 
-    return connect_to_this_ip46(protocol, socktype, host, scope_id, service, timeout);
+    return connect_to_this_ip46(protocol, socktype, host, scope_id, service, timeout,NULL);
 }
 
 void foreach_entry_in_connection_string(const char *destination, bool (*callback)(char *entry, void *data), void *data) {
@@ -1176,7 +1210,7 @@ inline int wait_on_socket_or_cancel_with_timeout(
         .revents = 0,
     };
 
-    bool forever = (timeout_ms == 0);
+    bool forever = (timeout_ms <= 0);
 
     while (timeout_ms > 0 || forever) {
         if(nd_thread_signaled_to_cancel()) {

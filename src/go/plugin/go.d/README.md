@@ -1,14 +1,3 @@
-<!--
-title: go.d.plugin
-description: "go.d.plugin is an external plugin for Netdata, responsible for running individual data collectors written in Go."
-custom_edit_url: "/src/go/plugin/go.d/README.md"
-sidebar_label: "go.d.plugin"
-learn_status: "Published"
-learn_topic_type: "Tasks"
-learn_rel_path: "Developers/External plugins/go.d.plugin"
-sidebar_position: 1
--->
-
 # go.d.plugin
 
 `go.d.plugin` is a [Netdata](https://github.com/netdata/netdata) external plugin. It is an **orchestrator** for data
@@ -53,10 +42,12 @@ see the appropriate collector readme.
 | [activemq](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/activemq)                     |           ActiveMQ            |
 | [ap](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/ap)                                 |          Wireless AP          |
 | [apache](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/apache)                         |            Apache             |
+| [apcupsd](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/apcupsd)                       |           UPS (APC)           |
 | [beanstalk](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/beanstalk)                   |           Beanstalk           |
 | [bind](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/bind)                             |           ISC Bind            |
 | [boinc](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/boinc)                           |             BOINC             |
 | [cassandra](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/cassandra)                   |           Cassandra           |
+| [ceph](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/ceph)                             |             Ceph              |
 | [chrony](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/chrony)                         |            Chrony             |
 | [clickhouse](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/clickhouse)                 |          ClickHouse           |
 | [cockroachdb](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/cockroachdb)               |          CockroachDB          |
@@ -75,7 +66,6 @@ see the appropriate collector readme.
 | [dovecot](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/dovecot)                       |            Dovecot            |
 | [elasticsearch](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/elasticsearch)           |   Elasticsearch/OpenSearch    |
 | [envoy](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/envoy)                           |             Envoy             |
-| [example](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/example)                       |               -               |
 | [exim](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/exim)                             |             Exim              |
 | [fail2ban](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/fail2ban)                     |        Fail2Ban Jails         |
 | [filecheck](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/filecheck)                   |     Files and Directories     |
@@ -106,13 +96,17 @@ see the appropriate collector readme.
 | [mysql](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/mysql)                           |             MySQL             |
 | [nginx](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nginx)                           |             NGINX             |
 | [nginxplus](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nginxplus)                   |          NGINX Plus           |
+| [nginxunit](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nginxunit)                   |          NGINX Unit           |
 | [nginxvts](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nginxvts)                     |           NGINX VTS           |
 | [nsd](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nsd)                               |       NSD (NLnet Labs)        |
 | [ntpd](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/ntpd)                             |          NTP daemon           |
+| [nvidia_smi](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nvidia_smi)                 |          Nvidia SMI           |
 | [nvme](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/nvme)                             |         NVMe devices          |
+| [openldap](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/openldap)                     |           OpenLDAP            |
 | [openvpn](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/openvpn)                       |            OpenVPN            |
 | [openvpn_status_log](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/openvpn_status_log) |            OpenVPN            |
 | [pgbouncer](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/pgbouncer)                   |           PgBouncer           |
+| [oracledb](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/oracledb)                     |           Oracle DB           |
 | [phpdaemon](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/phpdaemon)                   |           phpDaemon           |
 | [phpfpm](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/phpfpm)                         |            PHP-FPM            |
 | [pihole](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/pihole)                         |            Pi-hole            |
@@ -146,11 +140,15 @@ see the appropriate collector readme.
 | [tomcat](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/tomcat)                         |            Tomcat             |
 | [tor](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/tor)                               |              Tor              |
 | [traefik](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/traefik)                       |            Traefik            |
-| [upsd](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/upsd)                             |          UPSd (Nut)           |
+| [typesense](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/typesense)                   |           Typesense           |
 | [unbound](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/unbound)                       |            Unbound            |
+| [upsd](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/upsd)                             |          UPSd (Nut)           |
+| [uwsgi](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/uwsgi)                           |             uWSGI             |
+| [varnish](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/varnish)                       |            Varnish            |
 | [vcsa](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/vcsa)                             |   vCenter Server Appliance    |
 | [vernemq](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/vernemq)                       |            VerneMQ            |
 | [vsphere](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/vsphere)                       |     VMware vCenter Server     |
+| [w1sensor](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/w1sensor)                     |        1-Wire Sensors         |
 | [web_log](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/weblog)                        |         Apache/NGINX          |
 | [wireguard](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/wireguard)                   |           WireGuard           |
 | [whoisquery](https://github.com/netdata/netdata/tree/master/src/go/plugin/go.d/modules/whoisquery)                 |         Domain Expiry         |

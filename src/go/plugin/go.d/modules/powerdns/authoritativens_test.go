@@ -50,19 +50,19 @@ func TestAuthoritativeNS_Init(t *testing.T) {
 		"fails on unset URL": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: ""},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: ""},
 				},
 			},
 		},
 		"fails on invalid TLSCA": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{
 						URL: "http://127.0.0.1:38001",
 					},
-					Client: web.Client{
+					ClientConfig: web.ClientConfig{
 						TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"},
 					},
 				},
@@ -244,29 +244,13 @@ func TestAuthoritativeNS_Collect(t *testing.T) {
 			defer cleanup()
 			require.NoError(t, ns.Init())
 
-			collected := ns.Collect()
+			mx := ns.Collect()
 
-			assert.Equal(t, test.wantCollected, collected)
+			assert.Equal(t, test.wantCollected, mx)
 			if len(test.wantCollected) > 0 {
-				ensureCollectedHasAllChartsDimsVarsIDs(t, ns, collected)
+				module.TestMetricsHasAllChartsDims(t, ns.Charts(), mx)
 			}
 		})
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, ns *AuthoritativeNS, collected map[string]int64) {
-	for _, chart := range *ns.Charts() {
-		if chart.Obsolete {
-			continue
-		}
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", v.ID, chart.ID)
-		}
 	}
 }
 

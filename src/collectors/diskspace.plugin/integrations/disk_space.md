@@ -108,7 +108,7 @@ The file format is a modified INI syntax. The general structure is:
 [section2]
     option3 = some third value
 ```
-You can edit the configuration file using the `edit-config` script from the
+You can edit the configuration file using the [`edit-config`](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script from the
 Netdata [config directory](/docs/netdata-agent/configuration/README.md#the-netdata-config-directory).
 
 ```bash
@@ -125,7 +125,7 @@ You can also specify per mount point `[plugin:proc:diskspace:mountpoint]`
 |:----|:-----------|:-------|:--------:|
 | update every | Data collection frequency. | 1 | no |
 | remove charts of unmounted disks | Remove chart when a device is unmounted on host. | yes | no |
-| check for new mount points every | Parse proc files frequency. | 15 | no |
+| check for new mount points every | Parse proc files frequency. | 15s | no |
 | exclude space metrics on paths | Do not show metrics (charts) for listed paths. This option accepts netdata simple pattern. | /proc/* /sys/* /var/run/user/* /run/user/* /snap/* /var/lib/docker/* | no |
 | exclude space metrics on filesystems | Do not show metrics (charts) for listed filesystems. This option accepts netdata simple pattern. | *gvfs *gluster* *s3fs *ipfs *davfs2 *httpfs *sshfs *gdfs *moosefs fusectl autofs | no |
 | exclude inode metrics on filesystems | Do not show metrics (charts) for listed filesystems. This option accepts netdata simple pattern. | msdosfs msdos vfat overlayfs aufs* *unionfs | no |

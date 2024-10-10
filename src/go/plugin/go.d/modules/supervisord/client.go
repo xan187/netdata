@@ -28,7 +28,7 @@ func newSupervisorRPCClient(serverURL *url.URL, httpClient *http.Client) (superv
 		c := xmlrpc.NewClient("http://unix/RPC2")
 		t, ok := httpClient.Transport.(*http.Transport)
 		if !ok {
-			return nil, errors.New("unexpected HTTP client transport")
+			return nil, errors.New("unexpected HTTPConfig client transport")
 		}
 		t.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
 			d := net.Dialer{Timeout: httpClient.Timeout}
@@ -66,7 +66,7 @@ func (c *supervisorRPCClient) closeIdleConnections() {
 	c.client.HttpClient.CloseIdleConnections()
 }
 
-func parseGetAllProcessInfo(resp interface{}) ([]processStatus, error) {
+func parseGetAllProcessInfo(resp any) ([]processStatus, error) {
 	arr, ok := resp.(xmlrpc.Array)
 	if !ok {
 		return nil, fmt.Errorf("unexpected response type, want=xmlrpc.Array, got=%T", resp)

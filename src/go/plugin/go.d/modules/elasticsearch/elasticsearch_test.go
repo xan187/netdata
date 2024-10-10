@@ -3,12 +3,12 @@
 package elasticsearch
 
 import (
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/tlscfg"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 
@@ -57,8 +57,8 @@ func TestElasticsearch_Init(t *testing.T) {
 		},
 		"all stats": {
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: "http://127.0.0.1:38001"},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:38001"},
 				},
 				DoNodeStats:     true,
 				DoClusterHealth: true,
@@ -68,8 +68,8 @@ func TestElasticsearch_Init(t *testing.T) {
 		},
 		"only node_stats": {
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: "http://127.0.0.1:38001"},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:38001"},
 				},
 				DoNodeStats:     true,
 				DoClusterHealth: false,
@@ -80,15 +80,15 @@ func TestElasticsearch_Init(t *testing.T) {
 		"URL not set": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: ""},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: ""},
 				}},
 		},
 		"invalid TLSCA": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Client: web.Client{
+				HTTPConfig: web.HTTPConfig{
+					ClientConfig: web.ClientConfig{
 						TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"},
 					},
 				}},
@@ -96,8 +96,8 @@ func TestElasticsearch_Init(t *testing.T) {
 		"all API calls are disabled": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: "http://127.0.0.1:38001"},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:38001"},
 				},
 				DoNodeStats:     false,
 				DoClusterHealth: false,
@@ -636,37 +636,10 @@ func TestElasticsearch_Collect(t *testing.T) {
 				mx = es.Collect()
 			}
 
-			//m := mx
-			//l := make([]string, 0)
-			//for k := range m {
-			//	l = append(l, k)
-			//}
-			//sort.Strings(l)
-			//for _, value := range l {
-			//	fmt.Println(fmt.Sprintf("\"%s\": %d,", value, m[value]))
-			//}
-			//return
-
 			assert.Equal(t, test.wantCollected, mx)
 			assert.Len(t, *es.Charts(), test.wantCharts)
-			ensureCollectedHasAllChartsDimsVarsIDs(t, es, mx)
+			module.TestMetricsHasAllChartsDims(t, es.Charts(), mx)
 		})
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, es *Elasticsearch, collected map[string]int64) {
-	for _, chart := range *es.Charts() {
-		if chart.Obsolete {
-			continue
-		}
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
-		}
 	}
 }
 

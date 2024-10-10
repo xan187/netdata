@@ -4,7 +4,8 @@ package activemq
 
 import (
 	"errors"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
+
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 )
 
 func (a *ActiveMQ) validateConfig() error {

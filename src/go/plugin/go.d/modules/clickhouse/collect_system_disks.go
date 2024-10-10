@@ -26,7 +26,7 @@ type diskStats struct {
 }
 
 func (c *ClickHouse) collectSystemDisks(mx map[string]int64) error {
-	req, _ := web.NewHTTPRequest(c.Request)
+	req, _ := web.NewHTTPRequest(c.RequestConfig)
 	req.URL.RawQuery = makeURLQuery(querySystemDisks)
 
 	seen := make(map[string]*diskStats)
@@ -42,7 +42,7 @@ func (c *ClickHouse) collectSystemDisks(mx map[string]int64) error {
 
 	var name string
 
-	err := c.doOKDecodeCSV(req, func(column, value string, lineEnd bool) {
+	err := c.doHTTP(req, func(column, value string, lineEnd bool) {
 		switch column {
 		case "name":
 			name = value

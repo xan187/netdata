@@ -125,6 +125,8 @@ elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN" OR "${CMAKE_SYSTEM_NAME}" STREQU
         add_definitions(-D_GNU_SOURCE)
 
         if($ENV{CLION_IDE})
+                set(RUN_UNDER_CLION True)
+
                 # clion needs these to find the includes
                 if("${CMAKE_SYSTEM_NAME}" STREQUAL "MSYS" OR "${CMAKE_SYSTEM_NAME}" STREQUAL "Windows")
                         if("$ENV{MSYSTEM}" STREQUAL "MSYS")
@@ -156,8 +158,10 @@ option(ENABLE_DBENGINE "Enable dbengine metrics storage" True)
 
 # Data collection plugins
 option(ENABLE_PLUGIN_GO "Enable metric collectors written in Go" ${DEFAULT_FEATURE_STATE})
+option(ENABLE_PLUGIN_PYTHON "Enable metric collectors written in Python" ${DEFAULT_FEATURE_STATE})
 
-cmake_dependent_option(ENABLE_PLUGIN_APPS "Enable per-process resource usage monitoring" ${DEFAULT_FEATURE_STATE} "NOT OS_WINDOWS" False)
+cmake_dependent_option(ENABLE_PLUGIN_APPS "Enable per-process resource usage monitoring" ${DEFAULT_FEATURE_STATE} "OS_LINUX OR OS_FREEBSD OR OS_MACOS OR OS_WINDOWS" False)
+cmake_dependent_option(ENABLE_PLUGIN_CHARTS "Enable metric collectors written in Bash" ${DEFAULT_FEATURE_STATE} "NOT OS_WINDOWS" False)
 cmake_dependent_option(ENABLE_PLUGIN_CUPS "Enable CUPS monitoring" ${DEFAULT_FEATURE_STATE} "NOT OS_WINDOWS" False)
 
 cmake_dependent_option(ENABLE_PLUGIN_FREEIPMI "Enable IPMI monitoring" ${DEFAULT_FEATURE_STATE} "OS_LINUX OR OS_FREEBSD" False)
@@ -449,6 +453,15 @@ int main() {
 }
 " HAVE_BUILTIN_ATOMICS)
 
+check_cxx_source_compiles("
+#include <stdint.h>
+int main(void) {
+        uint64_t a;
+        __sync_add_and_fetch(&a, 1);
+        return 0;
+}
+" ARCH_SUPPORTS_64BIT_ATOMICS)
+
 check_c_source_compiles("
 void my_printf(char const *s, ...) __attribute__((format(gnu_printf, 1, 2)));
 int main() { return 0; }
@@ -716,6 +729,8 @@ set(LIBNETDATA_FILES
         src/libnetdata/dictionary/dictionary-callbacks.h
         src/libnetdata/linked-lists.h
         src/libnetdata/storage-point.h
+        src/libnetdata/parsers/parsers.h
+        src/libnetdata/parsers/duration.c
         src/libnetdata/bitmap64.h
         src/libnetdata/os/gettid.c
         src/libnetdata/os/gettid.h
@@ -759,9 +774,54 @@ set(LIBNETDATA_FILES
         src/libnetdata/os/close_range.h
         src/libnetdata/os/setproctitle.c
         src/libnetdata/os/setproctitle.h
+        src/libnetdata/os/windows-perflib/perflib.c
+        src/libnetdata/os/windows-perflib/perflib.h
+        src/libnetdata/os/windows-perflib/perflib-names.c
+        src/libnetdata/os/windows-perflib/perflib-dump.c
         src/libnetdata/paths/paths.c
         src/libnetdata/paths/paths.h
         src/libnetdata/json/json-c-parser-inline.c
+        src/libnetdata/parsers/duration.h
+        src/libnetdata/parsers/timeframe.c
+        src/libnetdata/parsers/timeframe.h
+        src/libnetdata/parsers/size.c
+        src/libnetdata/parsers/size.h
+        src/libnetdata/libjudy/judy-malloc.c
+        src/libnetdata/libjudy/judy-malloc.h
+        src/libnetdata/config/appconfig_internals.h
+        src/libnetdata/config/appconfig_exporters.c
+        src/libnetdata/config/appconfig_conf_file.c
+        src/libnetdata/config/appconfig_cleanup.c
+        src/libnetdata/config/appconfig_sections.c
+        src/libnetdata/config/appconfig_options.c
+        src/libnetdata/config/appconfig_migrate.c
+        src/libnetdata/config/appconfig_traversal.c
+        src/libnetdata/config/appconfig_api_sizes.c
+        src/libnetdata/config/appconfig_api_sizes.h
+        src/libnetdata/config/appconfig_api_durations.c
+        src/libnetdata/config/appconfig_api_durations.h
+        src/libnetdata/config/appconfig_api_numbers.c
+        src/libnetdata/config/appconfig_api_numbers.h
+        src/libnetdata/config/appconfig_api_text.c
+        src/libnetdata/config/appconfig_api_text.h
+        src/libnetdata/config/appconfig_api_boolean.c
+        src/libnetdata/config/appconfig_api_boolean.h
+        src/libnetdata/facets/logs_query_status.h
+        src/libnetdata/os/timestamps.c
+        src/libnetdata/os/timestamps.h
+        src/libnetdata/parsers/entries.c
+        src/libnetdata/parsers/entries.h
+        src/libnetdata/sanitizers/chart_id_and_name.c
+        src/libnetdata/sanitizers/chart_id_and_name.h
+        src/libnetdata/sanitizers/utf8-sanitizer.c
+        src/libnetdata/sanitizers/utf8-sanitizer.h
+        src/libnetdata/sanitizers/sanitizers.h
+        src/libnetdata/sanitizers/sanitizers-labels.c
+        src/libnetdata/sanitizers/sanitizers-labels.h
+        src/libnetdata/sanitizers/sanitizers-functions.c
+        src/libnetdata/sanitizers/sanitizers-functions.h
+        src/libnetdata/sanitizers/sanitizers-pluginsd.c
+        src/libnetdata/sanitizers/sanitizers-pluginsd.h
 )
 
 if(ENABLE_PLUGIN_EBPF)
@@ -1091,29 +1151,29 @@ endif()
 
 set(INTERNAL_COLLECTORS_FILES
         src/collectors/common-contexts/common-contexts.h
-        src/collectors/common-contexts/disk.io.h
-        src/collectors/common-contexts/system.io.h
-        src/collectors/common-contexts/system.interrupts.h
-        src/collectors/common-contexts/system.processes.h
-        src/collectors/common-contexts/system.ram.h
-        src/collectors/common-contexts/mem.swap.h
-        src/collectors/common-contexts/mem.pgfaults.h
-        src/collectors/common-contexts/mem.available.h
+        src/collectors/common-contexts/disk-io.h
+        src/collectors/common-contexts/system-io.h
+        src/collectors/common-contexts/system-interrupts.h
+        src/collectors/common-contexts/system-processes.h
+        src/collectors/common-contexts/system-ram.h
+        src/collectors/common-contexts/mem-swap.h
+        src/collectors/common-contexts/mem-pgfaults.h
+        src/collectors/common-contexts/mem-available.h
 )
 
 set(PLUGINSD_PLUGIN_FILES
-        src/collectors/plugins.d/plugins_d.c
-        src/collectors/plugins.d/plugins_d.h
-        src/collectors/plugins.d/pluginsd_dyncfg.c
-        src/collectors/plugins.d/pluginsd_dyncfg.h
-        src/collectors/plugins.d/pluginsd_functions.c
-        src/collectors/plugins.d/pluginsd_functions.h
-        src/collectors/plugins.d/pluginsd_internals.c
-        src/collectors/plugins.d/pluginsd_internals.h
-        src/collectors/plugins.d/pluginsd_parser.c
-        src/collectors/plugins.d/pluginsd_parser.h
-        src/collectors/plugins.d/pluginsd_replication.c
-        src/collectors/plugins.d/pluginsd_replication.h
+        src/plugins.d/plugins_d.c
+        src/plugins.d/plugins_d.h
+        src/plugins.d/pluginsd_dyncfg.c
+        src/plugins.d/pluginsd_dyncfg.h
+        src/plugins.d/pluginsd_functions.c
+        src/plugins.d/pluginsd_functions.h
+        src/plugins.d/pluginsd_internals.c
+        src/plugins.d/pluginsd_internals.h
+        src/plugins.d/pluginsd_parser.c
+        src/plugins.d/pluginsd_parser.h
+        src/plugins.d/pluginsd_replication.c
+        src/plugins.d/pluginsd_replication.h
 )
 
 set(RRD_PLUGIN_FILES
@@ -1244,6 +1304,7 @@ set(SYSTEMD_JOURNAL_PLUGIN_FILES
         src/libnetdata/maps/system-users.h
         src/libnetdata/maps/system-groups.h
         src/libnetdata/maps/system-services.h
+        src/collectors/systemd-journal.plugin/systemd-journal-sampling.h
 )
 
 set(STREAMING_PLUGIN_FILES
@@ -1301,14 +1362,13 @@ set(CLAIM_PLUGIN_FILES
 )
 
 set(CLAIM_WINDOWS_FILES
-        src/claim/netdata_claim.c
-        src/claim/netdata_claim.h
-        src/claim/netdata_claim_window.c
-        src/claim/netdata_claim_window.h
+        src/claim/main.c
+        src/claim/main.h
+        src/claim/ui.c
+        src/claim/ui.h
 )
 
 set(ACLK_ALWAYS_BUILD
-        src/aclk/aclk_rrdhost_state.h
         src/aclk/aclk_proxy.c
         src/aclk/aclk_proxy.h
         src/aclk/aclk.c
@@ -1366,24 +1426,44 @@ set(FREEBSD_PLUGIN_FILES
         src/collectors/proc.plugin/zfs_common.h
 )
 
+set(WINDOWS_EVENTS_PLUGIN_FILES
+        src/collectors/windows-events.plugin/windows-events.c
+        src/collectors/windows-events.plugin/windows-events.h
+        src/collectors/windows-events.plugin/windows-events-query.h
+        src/collectors/windows-events.plugin/windows-events-query.c
+        src/collectors/windows-events.plugin/windows-events-sources.c
+        src/collectors/windows-events.plugin/windows-events-sources.h
+        src/collectors/windows-events.plugin/windows-events-sid.c
+        src/collectors/windows-events.plugin/windows-events-sid.h
+        src/collectors/windows-events.plugin/windows-events-unicode.c
+        src/collectors/windows-events.plugin/windows-events-unicode.h
+        src/collectors/windows-events.plugin/windows-events-xml.c
+        src/collectors/windows-events.plugin/windows-events-xml.h
+        src/collectors/windows-events.plugin/windows-events-publishers.c
+        src/collectors/windows-events.plugin/windows-events-publishers.h
+        src/collectors/windows-events.plugin/windows-events-fields-cache.c
+        src/collectors/windows-events.plugin/windows-events-fields-cache.h
+        src/collectors/windows-events.plugin/windows-events-query-builder.c
+        src/collectors/windows-events.plugin/windows-events-query-builder.h
+)
+
 set(WINDOWS_PLUGIN_FILES
         src/collectors/windows.plugin/windows_plugin.c
         src/collectors/windows.plugin/windows_plugin.h
         src/collectors/windows.plugin/GetSystemUptime.c
         src/collectors/windows.plugin/GetSystemRAM.c
         src/collectors/windows.plugin/GetSystemCPU.c
-        src/collectors/windows.plugin/perflib.c
-        src/collectors/windows.plugin/perflib.h
         src/collectors/windows.plugin/perflib-rrd.c
         src/collectors/windows.plugin/perflib-rrd.h
-        src/collectors/windows.plugin/perflib-names.c
-        src/collectors/windows.plugin/perflib-dump.c
+        src/collectors/windows.plugin/perflib-mssql.c
         src/collectors/windows.plugin/perflib-storage.c
         src/collectors/windows.plugin/perflib-processor.c
+        src/collectors/windows.plugin/perflib-thermalzone.c
         src/collectors/windows.plugin/perflib-objects.c
         src/collectors/windows.plugin/perflib-network.c
         src/collectors/windows.plugin/perflib-memory.c
         src/collectors/windows.plugin/perflib-processes.c
+        src/collectors/windows.plugin/perflib-web-service.c
 )
 
 set(PROC_PLUGIN_FILES
@@ -1499,8 +1579,6 @@ endif()
 set(MQTT_WEBSOCKETS_FILES
         src/aclk/mqtt_websockets/mqtt_wss_client.c
         src/aclk/mqtt_websockets/mqtt_wss_client.h
-        src/aclk/mqtt_websockets/mqtt_wss_log.c
-        src/aclk/mqtt_websockets/mqtt_wss_log.h
         src/aclk/mqtt_websockets/ws_client.c
         src/aclk/mqtt_websockets/ws_client.h
         src/aclk/mqtt_websockets/mqtt_ng.c
@@ -1610,6 +1688,8 @@ if(ENABLE_H2O)
 
         target_compile_options(h2o PUBLIC -DH2O_USE_LIBUV=0)
         target_link_libraries(h2o PRIVATE PkgConfig::TLS)
+        target_compile_definitions(h2o PRIVATE
+                "$<$<NOT:$<BOOL:${ARCH_SUPPORTS_64BIT_ATOMICS}>>:H2O_NO_64BIT_ATOMICS>")
 endif()
 
 #
@@ -1665,7 +1745,7 @@ target_include_directories(libnetdata BEFORE PUBLIC ${CONFIG_H_DIR} ${CMAKE_SOUR
 target_link_libraries(libnetdata PUBLIC
         "$<$<NOT:$<BOOL:${HAVE_BUILTIN_ATOMICS}>>:atomic>"
         "$<$<OR:$<BOOL:${OS_LINUX}>,$<BOOL:${OS_FREEBSD}>>:pthread;rt>"
-        "$<$<BOOL:${OS_WINDOWS}>:kernel32;advapi32;winmm;rpcrt4>"
+        "$<$<BOOL:${OS_WINDOWS}>:kernel32;advapi32;winmm;rpcrt4;bcrypt>"
         "$<$<BOOL:${LINK_LIBM}>:m>"
         "${SYSTEMD_LDFLAGS}")
 
@@ -1829,19 +1909,24 @@ if(ENABLE_PLUGIN_APPS)
             src/collectors/apps.plugin/apps_targets.c
             src/collectors/apps.plugin/apps_users_and_groups.c
             src/collectors/apps.plugin/apps_output.c
-            src/collectors/apps.plugin/apps_proc_pid_status.c
-            src/collectors/apps.plugin/apps_proc_pid_limits.c
-            src/collectors/apps.plugin/apps_proc_pid_stat.c
-            src/collectors/apps.plugin/apps_proc_pid_cmdline.c
-            src/collectors/apps.plugin/apps_proc_pid_io.c
-            src/collectors/apps.plugin/apps_proc_stat.c
-            src/collectors/apps.plugin/apps_proc_pid_fd.c
-            src/collectors/apps.plugin/apps_proc_pids.c
-            src/collectors/apps.plugin/apps_proc_meminfo.c
+            src/collectors/apps.plugin/apps_pid_files.c
+            src/collectors/apps.plugin/apps_pid.c
+            src/collectors/apps.plugin/apps_aggregations.c
+            src/collectors/apps.plugin/apps_os_linux.c
+            src/collectors/apps.plugin/apps_os_freebsd.c
+            src/collectors/apps.plugin/apps_os_macos.c
+            src/collectors/apps.plugin/apps_os_windows.c
+            src/collectors/apps.plugin/apps_incremental_collection.c
+            src/collectors/apps.plugin/apps_os_windows_nt.c
+            src/collectors/apps.plugin/apps_pid_match.c
     )
 
     add_executable(apps.plugin ${APPS_PLUGIN_FILES})
-    target_link_libraries(apps.plugin libnetdata ${CAP_LIBRARIES})
+
+    target_link_libraries(apps.plugin libnetdata ${CAP_LIBRARIES}
+            "$<$<BOOL:${OS_WINDOWS}>:Version>"
+            "$<$<BOOL:${OS_WINDOWS}>:ntdll>")
+
     target_include_directories(apps.plugin PRIVATE ${CAP_INCLUDE_DIRS})
     target_compile_options(apps.plugin PRIVATE ${CAP_CFLAGS_OTHER})
 
@@ -2014,7 +2099,7 @@ if(ENABLE_PLUGIN_CUPS)
 endif()
 
 if(NEED_NDSUDO)
-    set(NDSUDO_FILES src/collectors/plugins.d/ndsudo.c)
+    set(NDSUDO_FILES src/collectors/utils/ndsudo.c)
 
     add_executable(ndsudo ${NDSUDO_FILES})
 
@@ -2052,6 +2137,15 @@ if(ENABLE_PLUGIN_SYSTEMD_JOURNAL)
                         COMPONENT plugin-systemd-journal
                         DESTINATION usr/share/doc/netdata-plugin-systemd-journal)
         endif()
+endif()
+
+if(OS_WINDOWS)
+        add_executable(windows-events.plugin ${WINDOWS_EVENTS_PLUGIN_FILES})
+        target_link_libraries(windows-events.plugin libnetdata wevtapi)
+
+        install(TARGETS windows-events.plugin
+                COMPONENT plugin-windows-events
+                DESTINATION usr/libexec/netdata/plugins.d)
 endif()
 
 if(ENABLE_PLUGIN_EBPF)
@@ -2149,7 +2243,7 @@ endif()
 
 if(ENABLE_PLUGIN_LOCAL_LISTENERS)
         set(LOCAL_LISTENERS_FILES
-                src/collectors/plugins.d/local_listeners.c
+                src/collectors/utils/local_listeners.c
                 src/libnetdata/maps/local-sockets.h
         )
 
@@ -2241,19 +2335,30 @@ endif()
 # build netdata (only Linux ATM)
 #
 
+if(OS_WINDOWS)
+        set(NETDATA_CLAIM_RES_FILES "packaging/windows/resources/netdata_claim.rc")
+        configure_file(packaging/windows/resources/netdata_claim.manifest.in ${CMAKE_SOURCE_DIR}/packaging/windows/resources/netdata_claim.manifest @ONLY)
+
+        set(NETDATACLI_RES_FILES "packaging/windows/resources/netdatacli.rc")
+        configure_file(packaging/windows/resources/netdatacli.manifest.in ${CMAKE_SOURCE_DIR}/packaging/windows/resources/netdatacli.manifest @ONLY)
+
+        set(NETDATA_RES_FILES "packaging/windows/resources/netdata.rc")
+        configure_file(packaging/windows/resources/netdata.manifest.in ${CMAKE_SOURCE_DIR}/packaging/windows/resources/netdata.manifest @ONLY)
+endif()
+
 add_executable(netdata
         ${NETDATA_FILES}
         "${ACLK_FILES}"
         "$<$<BOOL:${ENABLE_H2O}>:${H2O_FILES}>"
         "$<$<BOOL:${ENABLE_EXPORTER_MONGODB}>:${MONGODB_EXPORTING_FILES}>"
         "$<$<BOOL:${ENABLE_EXPORTER_PROMETHEUS_REMOTE_WRITE}>:${PROMETHEUS_REMOTE_WRITE_EXPORTING_FILES}>"
+        "$<$<BOOL:${OS_WINDOWS}>:${NETDATA_RES_FILES}>"
 )
 
 if(OS_WINDOWS)
-        set(NETDATA_CLAIM_RES_FILES "packaging/windows/resources/netdata_claim.rc")
-
-        add_executable(netdata_claim ${CLAIM_WINDOWS_FILES} ${NETDATA_CLAIM_RES_FILES})
-        target_link_libraries(netdata_claim shell32;gdi32;msftedit)
+        add_executable(NetdataClaim ${CLAIM_WINDOWS_FILES} ${NETDATA_CLAIM_RES_FILES})
+        target_link_libraries(NetdataClaim shell32 gdi32 msftedit)
+        target_compile_options(NetdataClaim PUBLIC -mwindows)
 endif()
 
 target_compile_definitions(netdata PRIVATE
@@ -2296,7 +2401,10 @@ set(SYSTEMD_CAT_NATIVE_FILES src/libnetdata/log/systemd-cat-native.c
                              src/libnetdata/log/systemd-cat-native.h)
 
 add_executable(systemd-cat-native ${SYSTEMD_CAT_NATIVE_FILES})
-target_link_libraries(systemd-cat-native libnetdata)
+target_link_libraries(systemd-cat-native
+        libnetdata
+        "$<$<BOOL:${CURL_FOUND}>:PkgConfig::CURL>"
+)
 
 install(TARGETS systemd-cat-native
         COMPONENT netdata
@@ -2353,7 +2461,7 @@ set(NETDATACLI_FILES
         src/cli/cli.c
 )
 
-add_executable(netdatacli ${NETDATACLI_FILES})
+add_executable(netdatacli ${NETDATACLI_FILES} "$<$<BOOL:${OS_WINDOWS}>:${NETDATACLI_RES_FILES}>")
 target_link_libraries(netdatacli libnetdata)
 
 install(TARGETS netdatacli
@@ -2416,9 +2524,7 @@ install(DIRECTORY COMPONENT netdata DESTINATION var/lib/netdata/cloud.d)
 install(DIRECTORY COMPONENT netdata DESTINATION var/run/netdata)
 install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata)
 install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/custom-plugins.d)
-install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/go.d)
 install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/health.d)
-install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/python.d)
 install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/ssl)
 install(DIRECTORY COMPONENT netdata DESTINATION etc/netdata/statsd.d)
 install(DIRECTORY COMPONENT netdata DESTINATION usr/lib/netdata/conf.d)
@@ -2438,15 +2544,15 @@ set(varlibdir_POST "${NETDATA_RUNTIME_PREFIX}/var/lib/netdata")
 set(netdata_user_POST "${NETDATA_USER}")
 set(netdata_group_POST "${NETDATA_USER}")
 
-configure_file(src/claim/netdata-claim.sh.in src/claim/netdata-claim.sh @ONLY)
-install(PROGRAMS
-        ${CMAKE_BINARY_DIR}/src/claim/netdata-claim.sh
-        COMPONENT netdata
-        DESTINATION "${BINDIR}")
-
-if(OS_WINDOWS)
+if(NOT OS_WINDOWS)
+        configure_file(src/claim/netdata-claim.sh.in src/claim/netdata-claim.sh @ONLY)
         install(PROGRAMS
-                ${CMAKE_BINARY_DIR}/netdata_claim.exe
+                ${CMAKE_BINARY_DIR}/src/claim/netdata-claim.sh
+                COMPONENT netdata
+                DESTINATION "${BINDIR}")
+else()
+        install(PROGRAMS
+                ${CMAKE_BINARY_DIR}/NetdataClaim.exe
                 COMPONENT netdata
                 DESTINATION "${BINDIR}")
 endif()
@@ -2773,62 +2879,66 @@ endif()
 # charts.d plugin
 #
 
-install(DIRECTORY COMPONENT plugin-chartsd DESTINATION etc/netdata/charts.d)
+if(ENABLE_PLUGIN_CHARTS)
+  install(DIRECTORY COMPONENT plugin-chartsd DESTINATION etc/netdata/charts.d)
 
-configure_file(src/collectors/charts.d.plugin/charts.d.plugin.in src/collectors/charts.d.plugin/charts.d.plugin @ONLY)
-install(PROGRAMS
-        ${CMAKE_BINARY_DIR}/src/collectors/charts.d.plugin/charts.d.plugin
-        COMPONENT plugin-chartsd
-        DESTINATION usr/libexec/netdata/plugins.d)
+  configure_file(src/collectors/charts.d.plugin/charts.d.plugin.in src/collectors/charts.d.plugin/charts.d.plugin @ONLY)
+  install(PROGRAMS
+          ${CMAKE_BINARY_DIR}/src/collectors/charts.d.plugin/charts.d.plugin
+          COMPONENT plugin-chartsd
+          DESTINATION usr/libexec/netdata/plugins.d)
 
-install(PROGRAMS
-        src/collectors/charts.d.plugin/charts.d.dryrun-helper.sh
-        COMPONENT plugin-chartsd
-        DESTINATION usr/libexec/netdata/plugins.d)
+  install(PROGRAMS
+          src/collectors/charts.d.plugin/charts.d.dryrun-helper.sh
+          COMPONENT plugin-chartsd
+          DESTINATION usr/libexec/netdata/plugins.d)
 
-# loopsleepms is used by the tc.plugin -> ship it in the netdata component
-install(FILES
-        src/collectors/charts.d.plugin/loopsleepms.sh.inc
-        COMPONENT netdata
-        DESTINATION usr/libexec/netdata/plugins.d)
+  install(FILES
+          src/collectors/charts.d.plugin/charts.d.conf
+          COMPONENT plugin-chartsd
+          DESTINATION usr/lib/netdata/conf.d)
 
-install(FILES
-        src/collectors/charts.d.plugin/charts.d.conf
-        COMPONENT plugin-chartsd
-        DESTINATION usr/lib/netdata/conf.d)
+  install(PROGRAMS
+          src/collectors/charts.d.plugin/example/example.chart.sh
+          src/collectors/charts.d.plugin/libreswan/libreswan.chart.sh
+          src/collectors/charts.d.plugin/opensips/opensips.chart.sh
+          COMPONENT plugin-chartsd
+          DESTINATION usr/libexec/netdata/charts.d)
 
-install(PROGRAMS
-        src/collectors/charts.d.plugin/apcupsd/apcupsd.chart.sh
-        src/collectors/charts.d.plugin/example/example.chart.sh
-        src/collectors/charts.d.plugin/libreswan/libreswan.chart.sh
-        src/collectors/charts.d.plugin/opensips/opensips.chart.sh
-        COMPONENT plugin-chartsd
-        DESTINATION usr/libexec/netdata/charts.d)
+  install(FILES
+          src/collectors/charts.d.plugin/example/example.conf
+          src/collectors/charts.d.plugin/libreswan/libreswan.conf
+          src/collectors/charts.d.plugin/opensips/opensips.conf
+          COMPONENT plugin-chartsd
+          DESTINATION usr/lib/netdata/conf.d/charts.d)
 
-install(FILES
-        src/collectors/charts.d.plugin/apcupsd/apcupsd.conf
-        src/collectors/charts.d.plugin/example/example.conf
-        src/collectors/charts.d.plugin/libreswan/libreswan.conf
-        src/collectors/charts.d.plugin/opensips/opensips.conf
-        COMPONENT plugin-chartsd
-        DESTINATION usr/lib/netdata/conf.d/charts.d)
+  if(BUILD_FOR_PACKAGING)
+    install(FILES
+            ${PKG_FILES_PATH}/copyright
+            COMPONENT plugin-chartsd
+            DESTINATION usr/share/doc/netdata-plugin-chartsd)
+  endif()
+endif()
 
-if(BUILD_FOR_PACKAGING)
-        install(FILES
-                ${PKG_FILES_PATH}/copyright
-                COMPONENT plugin-chartsd
-                DESTINATION usr/share/doc/netdata-plugin-chartsd)
+# This is needed both by the TC plugin (which only gets built on Linux) and the charts plugin.
+if(OS_LINUX OR ENABLE_PLUGIN_CHARTS)
+  install(FILES
+          src/collectors/charts.d.plugin/loopsleepms.sh.inc
+          COMPONENT netdata
+          DESTINATION usr/libexec/netdata/plugins.d)
 endif()
 
 #
 # tc-qos-helper
 #
 
-configure_file(src/collectors/tc.plugin/tc-qos-helper.sh.in src/collectors/tc.plugin/tc-qos-helper.sh @ONLY)
-install(PROGRAMS
-        ${CMAKE_BINARY_DIR}/src/collectors/tc.plugin/tc-qos-helper.sh
-        COMPONENT netdata
-        DESTINATION usr/libexec/netdata/plugins.d)
+if(OS_LINUX)
+  configure_file(src/collectors/tc.plugin/tc-qos-helper.sh.in src/collectors/tc.plugin/tc-qos-helper.sh @ONLY)
+  install(PROGRAMS
+          ${CMAKE_BINARY_DIR}/src/collectors/tc.plugin/tc-qos-helper.sh
+          COMPONENT netdata
+          DESTINATION usr/libexec/netdata/plugins.d)
+endif()
 
 # confs
 install(FILES
@@ -2841,56 +2951,50 @@ install(FILES
 # python.d plugin
 #
 
-configure_file(src/collectors/python.d.plugin/python.d.plugin.in src/collectors/python.d.plugin/python.d.plugin @ONLY)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/src/collectors/python.d.plugin/python.d.plugin
-        COMPONENT plugin-pythond
-        DESTINATION usr/libexec/netdata/plugins.d)
+if(ENABLE_PLUGIN_PYTHON)
+  install(DIRECTORY COMPONENT plugin-pythond DESTINATION etc/netdata/python.d)
 
-install(DIRECTORY src/collectors/python.d.plugin/python_modules
-        COMPONENT plugin-pythond
-        DESTINATION usr/libexec/netdata/python.d)
+  configure_file(src/collectors/python.d.plugin/python.d.plugin.in src/collectors/python.d.plugin/python.d.plugin @ONLY)
+  install(PROGRAMS ${CMAKE_BINARY_DIR}/src/collectors/python.d.plugin/python.d.plugin
+          COMPONENT plugin-pythond
+          DESTINATION usr/libexec/netdata/plugins.d)
 
-install(FILES src/collectors/python.d.plugin/python.d.conf
-        COMPONENT plugin-pythond
-        DESTINATION usr/lib/netdata/conf.d)
+  install(DIRECTORY src/collectors/python.d.plugin/python_modules
+          COMPONENT plugin-pythond
+          DESTINATION usr/libexec/netdata/python.d)
 
-install(FILES
-        src/collectors/python.d.plugin/am2320/am2320.conf
-        src/collectors/python.d.plugin/ceph/ceph.conf
-        src/collectors/python.d.plugin/go_expvar/go_expvar.conf
-        src/collectors/python.d.plugin/haproxy/haproxy.conf
-        src/collectors/python.d.plugin/openldap/openldap.conf
-        src/collectors/python.d.plugin/oracledb/oracledb.conf
-        src/collectors/python.d.plugin/pandas/pandas.conf
-        src/collectors/python.d.plugin/spigotmc/spigotmc.conf
-        src/collectors/python.d.plugin/traefik/traefik.conf
-        src/collectors/python.d.plugin/varnish/varnish.conf
-        src/collectors/python.d.plugin/w1sensor/w1sensor.conf
-        src/collectors/python.d.plugin/zscores/zscores.conf
-        COMPONENT plugin-pythond
-        DESTINATION usr/lib/netdata/conf.d/python.d)
+  install(FILES src/collectors/python.d.plugin/python.d.conf
+          COMPONENT plugin-pythond
+          DESTINATION usr/lib/netdata/conf.d)
 
-install(FILES
-        src/collectors/python.d.plugin/am2320/am2320.chart.py
-        src/collectors/python.d.plugin/ceph/ceph.chart.py
-        src/collectors/python.d.plugin/go_expvar/go_expvar.chart.py
-        src/collectors/python.d.plugin/haproxy/haproxy.chart.py
-        src/collectors/python.d.plugin/openldap/openldap.chart.py
-        src/collectors/python.d.plugin/oracledb/oracledb.chart.py
-        src/collectors/python.d.plugin/pandas/pandas.chart.py
-        src/collectors/python.d.plugin/spigotmc/spigotmc.chart.py
-        src/collectors/python.d.plugin/traefik/traefik.chart.py
-        src/collectors/python.d.plugin/varnish/varnish.chart.py
-        src/collectors/python.d.plugin/w1sensor/w1sensor.chart.py
-        src/collectors/python.d.plugin/zscores/zscores.chart.py
-        COMPONENT plugin-pythond
-        DESTINATION usr/libexec/netdata/python.d)
+  install(FILES
+          src/collectors/python.d.plugin/am2320/am2320.conf
+          src/collectors/python.d.plugin/go_expvar/go_expvar.conf
+          src/collectors/python.d.plugin/haproxy/haproxy.conf
+          src/collectors/python.d.plugin/pandas/pandas.conf
+          src/collectors/python.d.plugin/spigotmc/spigotmc.conf
+          src/collectors/python.d.plugin/traefik/traefik.conf
+          src/collectors/python.d.plugin/zscores/zscores.conf
+          COMPONENT plugin-pythond
+          DESTINATION usr/lib/netdata/conf.d/python.d)
 
-if(BUILD_FOR_PACKAGING)
-        install(FILES
-                ${PKG_FILES_PATH}/copyright
-                COMPONENT plugin-pythond
-                DESTINATION usr/share/doc/netdata-plugin-pythond)
+  install(FILES
+          src/collectors/python.d.plugin/am2320/am2320.chart.py
+          src/collectors/python.d.plugin/go_expvar/go_expvar.chart.py
+          src/collectors/python.d.plugin/haproxy/haproxy.chart.py
+          src/collectors/python.d.plugin/pandas/pandas.chart.py
+          src/collectors/python.d.plugin/spigotmc/spigotmc.chart.py
+          src/collectors/python.d.plugin/traefik/traefik.chart.py
+          src/collectors/python.d.plugin/zscores/zscores.chart.py
+          COMPONENT plugin-pythond
+          DESTINATION usr/libexec/netdata/python.d)
+
+  if(BUILD_FOR_PACKAGING)
+    install(FILES
+            ${PKG_FILES_PATH}/copyright
+            COMPONENT plugin-pythond
+            DESTINATION usr/share/doc/netdata-plugin-pythond)
+  endif()
 endif()
 
 #
@@ -2906,6 +3010,8 @@ install(PROGRAMS ${CMAKE_BINARY_DIR}/src/collectors/ioping.plugin/ioping.plugin
 # go.d.plugin
 #
 if(ENABLE_PLUGIN_GO)
+    install(DIRECTORY COMPONENT plugin-go DESTINATION etc/netdata/go.d)
+
     install(FILES src/go/plugin/go.d/config/go.d.conf
             COMPONENT plugin-go
             DESTINATION usr/lib/netdata/conf.d)
@@ -3003,64 +3109,9 @@ if(NOT OS_WINDOWS)
 endif()
 
 if(OS_WINDOWS)
-        install(FILES /usr/bin/awk.exe
-                      /usr/bin/bash.exe
-                      /usr/bin/cat.exe
-                      /usr/bin/chown.exe
-                      /usr/bin/curl.exe
-                      /usr/bin/env.exe
-                      /usr/bin/grep.exe
-                      /usr/bin/mkdir.exe
-                      /usr/bin/openssl.exe
-                      /usr/bin/rm.exe
-                      /usr/bin/sed.exe
-                      /usr/bin/sh.exe
-                      /usr/bin/tail.exe
-                      /usr/bin/tr.exe
-                      /usr/bin/uuidgen.exe
-                      /usr/bin/whoami.exe
-                DESTINATION "${BINDIR}")
-
-        install(FILES /usr/bin/msys-2.0.dll
-                      /usr/bin/msys-asn1-8.dll
-                      /usr/bin/msys-brotlicommon-1.dll
-                      /usr/bin/msys-brotlidec-1.dll
-                      /usr/bin/msys-brotlienc-1.dll
-                      /usr/bin/msys-com_err-1.dll
-                      /usr/bin/msys-crypt-2.dll
-                      /usr/bin/msys-crypto-3.dll
-                      /usr/bin/msys-curl-4.dll
-                      /usr/bin/msys-gcc_s-seh-1.dll
-                      /usr/bin/msys-gmp-10.dll
-                      /usr/bin/msys-gssapi-3.dll
-                      /usr/bin/msys-hcrypto-4.dll
-                      /usr/bin/msys-heimbase-1.dll
-                      /usr/bin/msys-heimntlm-0.dll
-                      /usr/bin/msys-hx509-5.dll
-                      /usr/bin/msys-iconv-2.dll
-                      /usr/bin/msys-idn2-0.dll
-                      /usr/bin/msys-intl-8.dll
-                      /usr/bin/msys-krb5-26.dll
-                      /usr/bin/msys-lz4-1.dll
-                      /usr/bin/msys-mpfr-6.dll
-                      /usr/bin/msys-ncursesw6.dll
-                      /usr/bin/msys-nghttp2-14.dll
-                      /usr/bin/msys-pcre-1.dll
-                      /usr/bin/msys-protobuf-32.dll
-                      /usr/bin/msys-psl-5.dll
-                      /usr/bin/msys-readline8.dll
-                      /usr/bin/msys-roken-18.dll
-                      /usr/bin/msys-sqlite3-0.dll
-                      /usr/bin/msys-ssh2-1.dll
-                      /usr/bin/msys-ssl-3.dll
-                      /usr/bin/msys-stdc++-6.dll
-                      /usr/bin/msys-unistring-5.dll
-                      /usr/bin/msys-uuid-1.dll
+        install(FILES /usr/bin/msys-protobuf-32.dll
                       /usr/bin/msys-uv-1.dll
-                      /usr/bin/msys-wind-0.dll
-                      /usr/bin/msys-z.dll
-                      /usr/bin/msys-zstd-1.dll
-                DESTINATION "${BINDIR}")
+                      DESTINATION "${BINDIR}")
 
         # Make bash & netdata happy
         install(DIRECTORY DESTINATION tmp)

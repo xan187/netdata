@@ -5,9 +5,12 @@ package nginx
 import (
 	_ "embed"
 	"errors"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
 
@@ -25,27 +28,31 @@ func init() {
 func New() *Nginx {
 	return &Nginx{
 		Config: Config{
-			HTTP: web.HTTP{
-				Request: web.Request{
+			HTTPConfig: web.HTTPConfig{
+				RequestConfig: web.RequestConfig{
 					URL: "http://127.0.0.1/stub_status",
 				},
-				Client: web.Client{
-					Timeout: web.Duration(time.Second * 1),
+				ClientConfig: web.ClientConfig{
+					Timeout: confopt.Duration(time.Second * 1),
 				},
 			},
-		}}
+		},
+		charts: charts.Copy(),
+	}
 }
 
 type Config struct {
-	UpdateEvery int `yaml:"update_every,omitempty" json:"update_every"`
-	web.HTTP    `yaml:",inline" json:""`
+	UpdateEvery    int `yaml:"update_every,omitempty" json:"update_every"`
+	web.HTTPConfig `yaml:",inline" json:""`
 }
 
 type Nginx struct {
 	module.Base
 	Config `yaml:",inline" json:""`
 
-	apiClient *apiClient
+	charts *module.Charts
+
+	httpClient *http.Client
 }
 
 func (n *Nginx) Configuration() any {
@@ -54,17 +61,14 @@ func (n *Nginx) Configuration() any {
 
 func (n *Nginx) Init() error {
 	if n.URL == "" {
-		n.Error("URL not set")
-		return errors.New("url not set")
+		return errors.New("nginx URL required but not set")
 	}
 
-	client, err := web.NewHTTPClient(n.Client)
+	httpClient, err := web.NewHTTPClient(n.ClientConfig)
 	if err != nil {
-		n.Error(err)
-		return err
+		return fmt.Errorf("failed initializing http client: %w", err)
 	}
-
-	n.apiClient = newAPIClient(client, n.Request)
+	n.httpClient = httpClient
 
 	n.Debugf("using URL %s", n.URL)
 	n.Debugf("using timeout: %s", n.Timeout)
@@ -78,15 +82,16 @@ func (n *Nginx) Check() error {
 		n.Error(err)
 		return err
 	}
+
 	if len(mx) == 0 {
 		return errors.New("no metrics collected")
-
 	}
+
 	return nil
 }
 
 func (n *Nginx) Charts() *Charts {
-	return charts.Copy()
+	return n.charts
 }
 
 func (n *Nginx) Collect() map[string]int64 {
@@ -100,7 +105,7 @@ func (n *Nginx) Collect() map[string]int64 {
 }
 
 func (n *Nginx) Cleanup() {
-	if n.apiClient != nil && n.apiClient.httpClient != nil {
-		n.apiClient.httpClient.CloseIdleConnections()
+	if n.httpClient != nil {
+		n.httpClient.CloseIdleConnections()
 	}
 }

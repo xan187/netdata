@@ -6,7 +6,7 @@
 // it is used by all netdata web servers
 
 int respect_web_browser_do_not_track_policy = 0;
-char *web_x_frame_options = NULL;
+const char *web_x_frame_options = NULL;
 
 int web_enable_gzip = 1, web_gzip_level = 3, web_gzip_strategy = Z_DEFAULT_STRATEGY;
 
@@ -381,12 +381,14 @@ static inline int dashboard_version(struct web_client *w) {
     if(!web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_WITH_VERSION))
         return -1;
 
-    if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V0))
-        return 0;
-    if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V1))
-        return 1;
+    if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V3))
+        return 3;
     if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V2))
         return 2;
+    if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V1))
+        return 1;
+    if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_IS_V0))
+        return 0;
 
     return -1;
 }
@@ -816,21 +818,28 @@ HTTP_VALIDATION http_request_validate(struct web_client *w) {
 
 static inline ssize_t web_client_send_data(struct web_client *w,const void *buf,size_t len, int flags)
 {
-    ssize_t bytes;
-    if ((web_client_check_conn_tcp(w)) && (netdata_ssl_web_server_ctx)) {
-        if (SSL_connection(&w->ssl)) {
-            bytes = netdata_ssl_write(&w->ssl, buf, len) ;
-            web_client_enable_wait_from_ssl(w);
-        }
-        else
-            bytes = send(w->ofd,buf, len , flags);
-    }
-    else if(web_client_check_conn_tcp(w) || web_client_check_conn_unix(w))
-        bytes = send(w->ofd,buf, len , flags);
-    else
-        bytes = -999;
+    do {
+        errno_clear();
 
-    return bytes;
+        ssize_t bytes;
+        if ((web_client_check_conn_tcp(w)) && (netdata_ssl_web_server_ctx)) {
+            if (SSL_connection(&w->ssl)) {
+                bytes = netdata_ssl_write(&w->ssl, buf, len);
+                web_client_enable_wait_from_ssl(w);
+            } else
+                bytes = send(w->ofd, buf, len, flags);
+        } else if (web_client_check_conn_tcp(w) || web_client_check_conn_unix(w))
+            bytes = send(w->ofd, buf, len, flags);
+        else
+            bytes = -999;
+
+        if(bytes < 0 && errno == EAGAIN) {
+            tinysleep();
+            continue;
+        }
+
+        return bytes;
+    } while(true);
 }
 
 void web_client_build_http_header(struct web_client *w) {
@@ -903,8 +912,8 @@ void web_client_build_http_header(struct web_client *w) {
 
     if(w->mode == HTTP_REQUEST_MODE_OPTIONS) {
         buffer_strcat(w->response.header_output,
-                "Access-Control-Allow-Methods: GET, OPTIONS\r\n"
-                        "Access-Control-Allow-Headers: accept, x-requested-with, origin, content-type, cookie, pragma, cache-control, x-auth-token\r\n"
+                "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                        "Access-Control-Allow-Headers: accept, x-requested-with, origin, content-type, cookie, pragma, cache-control, x-auth-token, x-netdata-auth, x-transaction-id\r\n"
                         "Access-Control-Max-Age: 1209600\r\n" // 86400 * 14
         );
     }
@@ -1140,7 +1149,8 @@ static inline int web_client_process_url(RRDHOST *host, struct web_client *w, ch
             hash_node = 0,
             hash_v0 = 0,
             hash_v1 = 0,
-            hash_v2 = 0;
+            hash_v2 = 0,
+            hash_v3 = 0;
 
 #ifdef NETDATA_INTERNAL_CHECKS
     static uint32_t hash_exit = 0, hash_debug = 0, hash_mirror = 0;
@@ -1154,6 +1164,7 @@ static inline int web_client_process_url(RRDHOST *host, struct web_client *w, ch
         hash_v0 = simple_hash("v0");
         hash_v1 = simple_hash("v1");
         hash_v2 = simple_hash("v2");
+        hash_v3 = simple_hash("v3");
 #ifdef NETDATA_INTERNAL_CHECKS
         hash_exit = simple_hash("exit");
         hash_debug = simple_hash("debug");
@@ -1177,6 +1188,12 @@ static inline int web_client_process_url(RRDHOST *host, struct web_client *w, ch
         else if(unlikely((hash == hash_host && strcmp(tok, "host") == 0) || (hash == hash_node && strcmp(tok, "node") == 0))) { // host switching
             netdata_log_debug(D_WEB_CLIENT_ACCESS, "%llu: host switch request ...", w->id);
             return web_client_switch_host(host, w, decoded_url_path, hash == hash_node, web_client_process_url);
+        }
+        else if(unlikely(hash == hash_v3 && strcmp(tok, "v3") == 0)) {
+            if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_WITH_VERSION))
+                return bad_request_multiple_dashboard_versions(w);
+            web_client_flag_set(w, WEB_CLIENT_FLAG_PATH_IS_V3);
+            return web_client_process_url(host, w, decoded_url_path);
         }
         else if(unlikely(hash == hash_v2 && strcmp(tok, "v2") == 0)) {
             if(web_client_flag_check(w, WEB_CLIENT_FLAG_PATH_WITH_VERSION))
@@ -1416,7 +1433,7 @@ void web_client_process_request_from_web_server(struct web_client *w) {
                 buffer_flush(w->url_as_received);
                 buffer_strcat(w->url_as_received, "too big request");
 
-                netdata_log_debug(D_WEB_CLIENT_ACCESS, "%llu: Received request is too big (%zu bytes).", w->id, w->response.data->len);
+                netdata_log_debug(D_WEB_CLIENT_ACCESS, "%llu: Received request is too big (%zu bytes).", w->id, (size_t)w->response.data->len);
 
                 size_t len = w->response.data->len;
                 buffer_flush(w->response.data);
@@ -1496,14 +1513,18 @@ void web_client_process_request_from_web_server(struct web_client *w) {
             break;
 
         case HTTP_REQUEST_MODE_OPTIONS:
-            netdata_log_debug(D_WEB_CLIENT, "%llu: Done preparing the OPTIONS response. Sending data (%zu bytes) to client.", w->id, w->response.data->len);
+            netdata_log_debug(D_WEB_CLIENT,
+                "%llu: Done preparing the OPTIONS response. Sending data (%zu bytes) to client.",
+                w->id, (size_t)w->response.data->len);
             break;
 
         case HTTP_REQUEST_MODE_POST:
         case HTTP_REQUEST_MODE_GET:
         case HTTP_REQUEST_MODE_PUT:
         case HTTP_REQUEST_MODE_DELETE:
-            netdata_log_debug(D_WEB_CLIENT, "%llu: Done preparing the response. Sending data (%zu bytes) to client.", w->id, w->response.data->len);
+            netdata_log_debug(D_WEB_CLIENT,
+                "%llu: Done preparing the response. Sending data (%zu bytes) to client.",
+                w->id, (size_t)w->response.data->len);
             break;
 
         case HTTP_REQUEST_MODE_FILECOPY:
@@ -1610,8 +1631,9 @@ ssize_t web_client_send_deflate(struct web_client *w)
     // when using compression,
     // w->response.sent is the amount of bytes passed through compression
 
-    netdata_log_debug(D_DEFLATE, "%llu: web_client_send_deflate(): w->response.data->len = %zu, w->response.sent = %zu, w->response.zhave = %zu, w->response.zsent = %zu, w->response.zstream.avail_in = %u, w->response.zstream.avail_out = %u, w->response.zstream.total_in = %lu, w->response.zstream.total_out = %lu.",
-        w->id, w->response.data->len, w->response.sent, w->response.zhave, w->response.zsent, w->response.zstream.avail_in, w->response.zstream.avail_out, w->response.zstream.total_in, w->response.zstream.total_out);
+    netdata_log_debug(D_DEFLATE,
+        "%llu: web_client_send_deflate(): w->response.data->len = %zu, w->response.sent = %zu, w->response.zhave = %zu, w->response.zsent = %zu, w->response.zstream.avail_in = %u, w->response.zstream.avail_out = %u, w->response.zstream.total_in = %lu, w->response.zstream.total_out = %lu.",
+        w->id, (size_t)w->response.data->len, w->response.sent, w->response.zhave, w->response.zsent, w->response.zstream.avail_in, w->response.zstream.avail_out, w->response.zstream.total_in, w->response.zstream.total_out);
 
     if(w->response.data->len - w->response.sent == 0 && w->response.zstream.avail_in == 0 && w->response.zhave == w->response.zsent && w->response.zstream.avail_out != 0) {
         // there is nothing to send

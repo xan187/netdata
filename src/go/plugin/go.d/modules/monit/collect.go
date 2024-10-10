@@ -6,8 +6,6 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
@@ -74,44 +72,18 @@ func (m *Monit) collectStatus(mx map[string]int64) error {
 }
 
 func (m *Monit) fetchStatus() (*monitStatus, error) {
-	req, err := web.NewHTTPRequestWithPath(m.Request, urlPathStatus)
+	req, err := web.NewHTTPRequestWithPath(m.RequestConfig, urlPathStatus)
 	if err != nil {
 		return nil, err
 	}
 	req.URL.RawQuery = urlQueryStatus
 
 	var status monitStatus
-	if err := m.doOKDecode(req, &status); err != nil {
+	if err := web.DoHTTP(m.httpClient).RequestXML(req, &status, func(d *xml.Decoder) {
+		d.CharsetReader = charset.NewReaderLabel
+	}); err != nil {
 		return nil, err
 	}
 
 	return &status, nil
-}
-
-func (m *Monit) doOKDecode(req *http.Request, in interface{}) error {
-	resp, err := m.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
-	}
-
-	dec := xml.NewDecoder(resp.Body)
-	dec.CharsetReader = charset.NewReaderLabel
-
-	if err := dec.Decode(in); err != nil {
-		return fmt.Errorf("error on decoding XML response from '%s': %v", req.URL, err)
-	}
-
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
 }

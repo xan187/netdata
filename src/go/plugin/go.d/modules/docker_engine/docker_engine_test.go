@@ -56,13 +56,13 @@ func TestDockerEngine_Init(t *testing.T) {
 			config: New().Config,
 		},
 		"empty URL": {
-			config:   Config{HTTP: web.HTTP{Request: web.Request{URL: ""}}},
+			config:   Config{HTTPConfig: web.HTTPConfig{RequestConfig: web.RequestConfig{URL: ""}}},
 			wantFail: true,
 		},
 		"nonexistent TLS CA": {
-			config: Config{HTTP: web.HTTP{
-				Request: web.Request{URL: "http://127.0.0.1:9323/metrics"},
-				Client:  web.Client{TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"}}}},
+			config: Config{HTTPConfig: web.HTTPConfig{
+				RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:9323/metrics"},
+				ClientConfig:  web.ClientConfig{TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"}}}},
 			wantFail: true,
 		},
 	}
@@ -253,26 +253,12 @@ func TestDockerEngine_Collect(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				_ = pulsar.Collect()
 			}
-			collected := pulsar.Collect()
+			mx := pulsar.Collect()
 
-			require.NotNil(t, collected)
-			require.Equal(t, test.expected, collected)
-			ensureCollectedHasAllChartsDimsVarsIDs(t, pulsar, collected)
+			require.NotNil(t, mx)
+			require.Equal(t, test.expected, mx)
+			module.TestMetricsHasAllChartsDims(t, pulsar.Charts(), mx)
 		})
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, dockerEngine *DockerEngine, collected map[string]int64) {
-	t.Helper()
-	for _, chart := range *dockerEngine.Charts() {
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
-		}
 	}
 }
 

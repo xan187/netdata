@@ -19,11 +19,7 @@ char *ebpf_plugin_dir = PLUGINS_DIR;
 static char *ebpf_configured_log_dir = LOG_DIR;
 
 char *ebpf_algorithms[] = { EBPF_CHART_ALGORITHM_ABSOLUTE, EBPF_CHART_ALGORITHM_INCREMENTAL};
-struct config collector_config = { .first_section = NULL,
-                                   .last_section = NULL,
-                                   .mutex = NETDATA_MUTEX_INITIALIZER,
-                                   .index = { .avl_tree = { .root = NULL, .compar = appconfig_section_compare },
-                                              .rwlock = AVL_LOCK_INITIALIZER } };
+struct config collector_config = APPCONFIG_INITIALIZER;
 
 int running_on_kernel = 0;
 int ebpf_nprocs;
@@ -661,7 +657,7 @@ struct vfs_bpf *vfs_bpf_obj = NULL;
 #else
 void *default_btf = NULL;
 #endif
-char *btf_path = NULL;
+const char *btf_path = NULL;
 
 /*****************************************************************
  *
@@ -1608,7 +1604,7 @@ static void get_ipv6_last_addr(union netdata_ip_t *out, union netdata_ip_t *in, 
  *
  * @return it returns 0 on success and -1 otherwise.
  */
-static inline int ebpf_ip2nl(uint8_t *dst, char *ip, int domain, char *source)
+static inline int ebpf_ip2nl(uint8_t *dst, const char *ip, int domain, char *source)
 {
     if (inet_pton(domain, ip, dst) <= 0) {
         netdata_log_error("The address specified (%s) is invalid ", source);
@@ -1666,14 +1662,14 @@ void ebpf_clean_ip_structure(ebpf_network_viewer_ip_list_t **clean)
  * @param out a pointer to store the link list
  * @param ip the value given as parameter
  */
-static void ebpf_parse_ip_list_unsafe(void **out, char *ip)
+static void ebpf_parse_ip_list_unsafe(void **out, const char *ip)
 {
     ebpf_network_viewer_ip_list_t **list = (ebpf_network_viewer_ip_list_t **)out;
 
     char *ipdup = strdupz(ip);
     union netdata_ip_t first = { };
     union netdata_ip_t last = { };
-    char *is_ipv6;
+    const char *is_ipv6;
     if (*ip == '*' && *(ip+1) == '\0') {
         memset(first.addr8, 0, sizeof(first.addr8));
         memset(last.addr8, 0xFF, sizeof(last.addr8));
@@ -1684,7 +1680,8 @@ static void ebpf_parse_ip_list_unsafe(void **out, char *ip)
         goto storethisip;
     }
 
-    char *end = ip;
+    char *enddup = strdupz(ip);
+    char *end = enddup;
     // Move while I cannot find a separator
     while (*end && *end != '/' && *end != '-') end++;
 
@@ -1814,7 +1811,7 @@ static void ebpf_parse_ip_list_unsafe(void **out, char *ip)
 
     ebpf_network_viewer_ip_list_t *store;
 
-    storethisip:
+storethisip:
     store = callocz(1, sizeof(ebpf_network_viewer_ip_list_t));
     store->value = ipdup;
     store->hash = simple_hash(ipdup);
@@ -1825,8 +1822,9 @@ static void ebpf_parse_ip_list_unsafe(void **out, char *ip)
     ebpf_fill_ip_list_unsafe(list, store, "socket");
     return;
 
-    cleanipdup:
+cleanipdup:
     freez(ipdup);
+    freez(enddup);
 }
 
 /**
@@ -1836,7 +1834,7 @@ static void ebpf_parse_ip_list_unsafe(void **out, char *ip)
  *
  * @param ptr  is a pointer with the text to parse.
  */
-void ebpf_parse_ips_unsafe(char *ptr)
+void ebpf_parse_ips_unsafe(const char *ptr)
 {
     // No value
     if (unlikely(!ptr))
@@ -1927,7 +1925,7 @@ static inline void fill_port_list(ebpf_network_viewer_port_list_t **out, ebpf_ne
  * @param out a pointer to store the link list
  * @param service the service used to create the structure that will be linked.
  */
-static void ebpf_parse_service_list(void **out, char *service)
+static void ebpf_parse_service_list(void **out, const char *service)
 {
     ebpf_network_viewer_port_list_t **list = (ebpf_network_viewer_port_list_t **)out;
     struct servent *serv = getservbyname((const char *)service, "tcp");
@@ -1956,8 +1954,10 @@ static void ebpf_parse_service_list(void **out, char *service)
  * @param out a pointer to store the link list
  * @param range the informed range for the user.
  */
-static void ebpf_parse_port_list(void **out, char *range)
-{
+static void ebpf_parse_port_list(void **out, const char *range_param) {
+    char range[strlen(range_param) + 1];
+    strncpyz(range, range_param, strlen(range_param));
+
     int first, last;
     ebpf_network_viewer_port_list_t **list = (ebpf_network_viewer_port_list_t **)out;
 
@@ -2029,7 +2029,7 @@ static void ebpf_parse_port_list(void **out, char *range)
  *
  * @param ptr  is a pointer with the text to parse.
  */
-void ebpf_parse_ports(char *ptr)
+void ebpf_parse_ports(const char *ptr)
 {
     // No value
     if (unlikely(!ptr))
@@ -2480,7 +2480,7 @@ static void ebpf_link_hostname(ebpf_network_viewer_hostname_list_t **out, ebpf_n
  * @param out is the output link list
  * @param parse is a pointer with the text to parser.
  */
-static void ebpf_link_hostnames(char *parse)
+static void ebpf_link_hostnames(const char *parse)
 {
     // No value
     if (unlikely(!parse))
@@ -2536,7 +2536,7 @@ void parse_network_viewer_section(struct config *cfg)
                                                                           EBPF_CONFIG_RESOLVE_SERVICE,
                                                                           CONFIG_BOOLEAN_YES);
 
-    char *value = appconfig_get(cfg, EBPF_NETWORK_VIEWER_SECTION, EBPF_CONFIG_PORTS, NULL);
+    const char *value = appconfig_get(cfg, EBPF_NETWORK_VIEWER_SECTION, EBPF_CONFIG_PORTS, NULL);
     ebpf_parse_ports(value);
 
     if (network_viewer_opt.hostname_resolution_enabled) {
@@ -2684,7 +2684,7 @@ static void ebpf_allocate_common_vectors()
  *
  * @param ptr the option given by users
  */
-static inline void ebpf_how_to_load(char *ptr)
+static inline void ebpf_how_to_load(const char *ptr)
 {
     if (!strcasecmp(ptr, EBPF_CFG_LOAD_MODE_RETURN))
         ebpf_set_thread_mode(MODE_RETURN);
@@ -2775,7 +2775,7 @@ static inline void ebpf_set_load_mode(netdata_ebpf_load_mode_t load, netdata_ebp
  *  @param str      value read from configuration file.
  *  @param origin   specify the configuration file loaded
  */
-static inline void epbf_update_load_mode(char *str, netdata_ebpf_load_mode_t origin)
+static inline void epbf_update_load_mode(const char *str, netdata_ebpf_load_mode_t origin)
 {
     netdata_ebpf_load_mode_t load = epbf_convert_string_to_load_mode(str);
 
@@ -2808,7 +2808,7 @@ static void read_collector_values(int *disable_cgroups,
                                   int update_every, netdata_ebpf_load_mode_t origin)
 {
     // Read global section
-    char *value;
+    const char *value;
     if (appconfig_exists(&collector_config, EBPF_GLOBAL_SECTION, "load")) // Backward compatibility
         value = appconfig_get(&collector_config, EBPF_GLOBAL_SECTION, "load",
                               EBPF_CFG_LOAD_MODE_DEFAULT);
@@ -4076,7 +4076,6 @@ int main(int argc, char **argv)
     heartbeat_t hb;
     heartbeat_init(&hb);
     int update_apps_every = (int) EBPF_CFG_UPDATE_APPS_EVERY_DEFAULT;
-    uint32_t max_period = EBPF_CLEANUP_FACTOR;
     int update_apps_list = update_apps_every - 1;
     int process_maps_per_core = ebpf_modules[EBPF_MODULE_PROCESS_IDX].maps_per_core;
     //Plugin will be killed when it receives a signal
@@ -4099,7 +4098,7 @@ int main(int argc, char **argv)
                 pthread_mutex_lock(&collect_data_mutex);
                 ebpf_parse_proc_files();
                 if (collect_pids & (1<<EBPF_MODULE_PROCESS_IDX)) {
-                    collect_data_for_all_processes(process_pid_fd, process_maps_per_core, max_period);
+                    collect_data_for_all_processes(process_pid_fd, process_maps_per_core);
                 }
 
                 ebpf_create_apps_charts(apps_groups_root_target);

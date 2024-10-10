@@ -54,15 +54,15 @@ func TestNginxVTS_Init(t *testing.T) {
 		"URL not set": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: ""},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: ""},
 				}},
 		},
 		"invalid TLSCA": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Client: web.Client{
+				HTTPConfig: web.HTTPConfig{
+					ClientConfig: web.ClientConfig{
 						TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"},
 					},
 				}},
@@ -170,29 +170,13 @@ func TestNginxVTS_Collect(t *testing.T) {
 			vts, cleanup := test.prepare(t)
 			defer cleanup()
 
-			collected := vts.Collect()
+			mx := vts.Collect()
 
-			assert.Equal(t, test.wantCollected, collected)
+			assert.Equal(t, test.wantCollected, mx)
 			if test.checkCharts {
-				ensureCollectedHasAllChartsDimsVarsIDs(t, vts, collected)
+				module.TestMetricsHasAllChartsDims(t, vts.Charts(), mx)
 			}
 		})
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, vts *NginxVTS, collected map[string]int64) {
-	for _, chart := range *vts.Charts() {
-		if chart.Obsolete {
-			continue
-		}
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
-		}
 	}
 }
 

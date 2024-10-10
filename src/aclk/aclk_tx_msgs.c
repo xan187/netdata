@@ -77,7 +77,7 @@ static short aclk_send_message_with_bin_payload(mqtt_wss_client client, json_obj
 
     int rc = mqtt_wss_publish5(client, (char*)topic, NULL, full_msg, &freez_aclk_publish5b, full_msg_len, MQTT_WSS_PUB_QOS1, &packet_id);
 
-    if (rc == MQTT_WSS_ERR_TOO_BIG_FOR_SERVER)
+    if (rc == MQTT_WSS_ERR_MSG_TOO_BIG)
         return HTTP_RESP_CONTENT_TOO_LONG;
 
     return 0;
@@ -189,9 +189,6 @@ short aclk_http_msg_v2(mqtt_wss_client client, const char *topic, const char *ms
         case HTTP_RESP_INTERNAL_SERVER_ERROR:
             aclk_http_msg_v2_err(client, topic, msg_id, rc, CLOUD_EC_FAIL_TOPIC, CLOUD_EMSG_FAIL_TOPIC, payload, payload_len);
             break;
-//        case HTTP_RESP_SERVICE_UNAVAILABLE:
-//            aclk_http_msg_v2_err(client, topic, msg_id, rc, CLOUD_EC_SND_TIMEOUT, CLOUD_EMSG_SND_TIMEOUT, payload, payload_len);
-//            break;
         default:
             rc = http_code;
             break;

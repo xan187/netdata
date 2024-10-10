@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/netdata/netdata/go/plugins/logger"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/vnodes"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,8 @@ type Module interface {
 	GetBase() *Base
 
 	Configuration() any
+
+	VirtualNode() *vnodes.VirtualNode
 }
 
 // Base is a helper struct. All modules should embed this struct.
@@ -44,12 +47,14 @@ type Base struct {
 
 func (b *Base) GetBase() *Base { return b }
 
+func (b *Base) VirtualNode() *vnodes.VirtualNode { return nil }
+
 func TestConfigurationSerialize(t *testing.T, mod Module, cfgJSON, cfgYAML []byte) {
 	t.Helper()
 	tests := map[string]struct {
 		config    []byte
-		unmarshal func(in []byte, out interface{}) (err error)
-		marshal   func(in interface{}) (out []byte, err error)
+		unmarshal func(in []byte, out any) (err error)
+		marshal   func(in any) (out []byte, err error)
 	}{
 		"json": {config: cfgJSON, marshal: json.Marshal, unmarshal: json.Unmarshal},
 		"yaml": {config: cfgYAML, marshal: yaml.Marshal, unmarshal: yaml.Unmarshal},

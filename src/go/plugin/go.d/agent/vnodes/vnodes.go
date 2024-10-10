@@ -11,6 +11,7 @@ import (
 
 	"github.com/netdata/netdata/go/plugins/logger"
 
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v2"
 )
 
@@ -37,9 +38,9 @@ type (
 		vnodes  map[string]*VirtualNode
 	}
 	VirtualNode struct {
-		GUID     string            `yaml:"guid"`
-		Hostname string            `yaml:"hostname"`
-		Labels   map[string]string `yaml:"labels"`
+		GUID     string            `yaml:"guid" json:"guid"`
+		Hostname string            `yaml:"hostname" json:"hostname"`
+		Labels   map[string]string `yaml:"labels" json:"labels"`
 	}
 )
 
@@ -99,7 +100,11 @@ func (vn *Vnodes) readConfDir() {
 
 		for _, v := range cfg {
 			if v.Hostname == "" || v.GUID == "" {
-				vn.Warningf("skipping virtual node '%+v': some required fields are missing (%s)", v, path)
+				vn.Warningf("skipping virtual node '%+v': required fields are missing (%s)", v, path)
+				continue
+			}
+			if err := uuid.Validate(v.GUID); err != nil {
+				vn.Warningf("skipping virtual node '%+v': invalid GUID: %v (%s)", v, err, path)
 				continue
 			}
 			if _, ok := vn.vnodes[v.Hostname]; ok {
@@ -125,7 +130,7 @@ func isConfigFile(path string) bool {
 	}
 }
 
-func loadConfigFile(conf interface{}, path string) error {
+func loadConfigFile(conf any, path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err

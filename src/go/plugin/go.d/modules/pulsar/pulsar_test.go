@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/tlscfg"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 
@@ -54,22 +54,22 @@ func TestPulsar_Init(t *testing.T) {
 			config: New().Config,
 		},
 		"empty topic filter": {
-			config: Config{HTTP: web.HTTP{Request: web.Request{URL: "http://127.0.0.1:8080/metric"}}},
+			config: Config{HTTPConfig: web.HTTPConfig{RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:8080/metric"}}},
 		},
 		"bad syntax topic filer": {
 			config: Config{
-				HTTP:        web.HTTP{Request: web.Request{URL: "http://127.0.0.1:8080/metrics"}},
+				HTTPConfig:  web.HTTPConfig{RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:8080/metrics"}},
 				TopicFilter: matcher.SimpleExpr{Includes: []string{"+"}}},
 			wantFail: true,
 		},
 		"empty URL": {
-			config:   Config{HTTP: web.HTTP{Request: web.Request{URL: ""}}},
+			config:   Config{HTTPConfig: web.HTTPConfig{RequestConfig: web.RequestConfig{URL: ""}}},
 			wantFail: true,
 		},
 		"nonexistent TLS CA": {
-			config: Config{HTTP: web.HTTP{
-				Request: web.Request{URL: "http://127.0.0.1:8080/metric"},
-				Client:  web.Client{TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"}}}},
+			config: Config{HTTPConfig: web.HTTPConfig{
+				RequestConfig: web.RequestConfig{URL: "http://127.0.0.1:8080/metric"},
+				ClientConfig:  web.ClientConfig{TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"}}}},
 			wantFail: true,
 		},
 	}
@@ -171,11 +171,11 @@ func TestPulsar_Collect(t *testing.T) {
 			for i := 0; i < 10; i++ {
 				_ = pulsar.Collect()
 			}
-			collected := pulsar.Collect()
+			mx := pulsar.Collect()
 
-			require.NotNil(t, collected)
-			require.Equal(t, test.expected, collected)
-			ensureCollectedHasAllChartsDimsVarsIDs(t, pulsar, collected)
+			require.NotNil(t, mx)
+			require.Equal(t, test.expected, mx)
+			module.TestMetricsHasAllChartsDims(t, pulsar.Charts(), mx)
 		})
 	}
 }
@@ -208,19 +208,6 @@ func TestPulsar_Collect_RemoveAddNamespacesTopicsInRuntime(t *testing.T) {
 			if strings.HasPrefix(chart.ID, "topic_") {
 				assert.Truef(t, dim.Obsolete, "expected chart '%s' dim '%s' Obsolete flag is set", chart.ID, dim.ID)
 			}
-		}
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, pulsar *Pulsar, collected map[string]int64) {
-	for _, chart := range *pulsar.Charts() {
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
 		}
 	}
 }

@@ -1488,7 +1488,7 @@ static void freeimi_function_sensors(const char *transaction, char *function __m
     char function_copy[strlen(function) + 1];
     memcpy(function_copy, function, sizeof(function_copy));
     char *words[1024];
-    size_t num_words = quoted_strings_splitter_pluginsd(function_copy, words, 1024);
+    size_t num_words = quoted_strings_splitter_whitespace(function_copy, words, 1024);
     for(size_t i = 1; i < num_words ;i++) {
         char *param = get_word(words, num_words, i);
         if(strcmp(param, "info") == 0) {
@@ -1629,7 +1629,10 @@ close_and_send:
     buffer_json_member_add_time_t(wb, "expires", now_s + update_every);
     buffer_json_finalize(wb);
 
-    pluginsd_function_result_to_stdout(transaction, HTTP_RESP_OK, "application/json", now_s + update_every, wb);
+    wb->response_code = HTTP_RESP_OK;
+    wb->content_type = CT_APPLICATION_JSON;
+    wb->expires = now_s + update_every;
+    pluginsd_function_result_to_stdout(transaction, wb);
 
     buffer_free(wb);
 }
@@ -1637,7 +1640,6 @@ close_and_send:
 // ----------------------------------------------------------------------------
 // main, command line arguments parsing
 
-static void plugin_exit(int code) NORETURN;
 static void plugin_exit(int code) {
     fflush(stdout);
     function_plugin_should_exit = true;
@@ -2042,11 +2044,13 @@ int main (int argc, char **argv) {
                 collector_error("%s(): sensors failed to initialize. Calling DISABLE.", __FUNCTION__);
                 fprintf(stdout, "DISABLE\n");
                 plugin_exit(0);
+                break;
 
             case ICS_FAILED:
                 collector_error("%s(): sensors fails repeatedly to collect metrics. Exiting to restart.", __FUNCTION__);
                 fprintf(stdout, "EXIT\n");
                 plugin_exit(0);
+                break;
         }
 
         if(netdata_do_sel) {

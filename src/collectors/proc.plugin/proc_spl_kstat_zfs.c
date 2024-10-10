@@ -18,7 +18,7 @@ int do_proc_spl_kstat_zfs_arcstats(int update_every, usec_t dt) {
 
     static int do_zfs_stats = 0;
     static procfile *ff = NULL;
-    static char *dirname = NULL;
+    static const char *dirname = NULL;
     static ARL_BASE *arl_base = NULL;
 
     arcstats.l2exist = -1;
@@ -54,6 +54,8 @@ int do_proc_spl_kstat_zfs_arcstats(int update_every, usec_t dt) {
         arl_expect(arl_base, "hash_chains", &arcstats.hash_chains);
         arl_expect(arl_base, "hash_chain_max", &arcstats.hash_chain_max);
         arl_expect(arl_base, "p", &arcstats.p);
+        arl_expect(arl_base, "pd", &arcstats.pd);
+        arl_expect(arl_base, "pm", &arcstats.pd);
         arl_expect(arl_base, "c", &arcstats.c);
         arl_expect(arl_base, "c_min", &arcstats.c_min);
         arl_expect(arl_base, "c_max", &arcstats.c_max);

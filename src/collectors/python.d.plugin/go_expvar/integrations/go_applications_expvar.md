@@ -171,7 +171,7 @@ number of currently running Goroutines and updates these stats every second.
 The configuration file name for this integration is `python.d/go_expvar.conf`.
 
 
-You can edit the configuration file using the `edit-config` script from the
+You can edit the configuration file using the [`edit-config`](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script from the
 Netdata [config directory](/docs/netdata-agent/configuration/README.md#the-netdata-config-directory).
 
 ```bash
@@ -231,7 +231,7 @@ See [this issue](https://github.com/netdata/netdata/pull/1902#issuecomment-28449
 
 Please see these two links to the official Netdata documentation for more information about the values:
 
--   [External plugins - charts](/src/collectors/plugins.d/README.md#chart)
+-   [External plugins - charts](/src/plugins.d/README.md#chart)
 -   [Chart variables](/src/collectors/python.d.plugin/README.md#global-variables-order-and-chart)
 
 **Line definitions**
@@ -255,7 +255,7 @@ hidden: False
 ```
 
 Please see the following link for more information about the options and their default values:
-[External plugins - dimensions](/src/collectors/plugins.d/README.md#dimension)
+[External plugins - dimensions](/src/plugins.d/README.md#dimension)
 
 Apart from top-level expvars, this plugin can also parse expvars stored in a multi-level map;
 All dicts in the resulting JSON document are then flattened to one level.

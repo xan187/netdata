@@ -3,12 +3,10 @@
 package elasticsearch
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"math"
-	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -165,10 +163,10 @@ func (es *Elasticsearch) scrapeNodesStats(ms *esMetrics) {
 		p = urlPathLocalNodeStats
 	}
 
-	req, _ := web.NewHTTPRequestWithPath(es.Request, p)
+	req, _ := web.NewHTTPRequestWithPath(es.RequestConfig, p)
 
 	var stats esNodesStats
-	if err := es.doOKDecode(req, &stats); err != nil {
+	if err := web.DoHTTP(es.httpClient).RequestJSON(req, &stats); err != nil {
 		es.Warning(err)
 		return
 	}
@@ -177,10 +175,10 @@ func (es *Elasticsearch) scrapeNodesStats(ms *esMetrics) {
 }
 
 func (es *Elasticsearch) scrapeClusterHealth(ms *esMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(es.Request, urlPathClusterHealth)
+	req, _ := web.NewHTTPRequestWithPath(es.RequestConfig, urlPathClusterHealth)
 
 	var health esClusterHealth
-	if err := es.doOKDecode(req, &health); err != nil {
+	if err := web.DoHTTP(es.httpClient).RequestJSON(req, &health); err != nil {
 		es.Warning(err)
 		return
 	}
@@ -189,10 +187,10 @@ func (es *Elasticsearch) scrapeClusterHealth(ms *esMetrics) {
 }
 
 func (es *Elasticsearch) scrapeClusterStats(ms *esMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(es.Request, urlPathClusterStats)
+	req, _ := web.NewHTTPRequestWithPath(es.RequestConfig, urlPathClusterStats)
 
 	var stats esClusterStats
-	if err := es.doOKDecode(req, &stats); err != nil {
+	if err := web.DoHTTP(es.httpClient).RequestJSON(req, &stats); err != nil {
 		es.Warning(err)
 		return
 	}
@@ -201,11 +199,11 @@ func (es *Elasticsearch) scrapeClusterStats(ms *esMetrics) {
 }
 
 func (es *Elasticsearch) scrapeLocalIndicesStats(ms *esMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(es.Request, urlPathIndicesStats)
+	req, _ := web.NewHTTPRequestWithPath(es.RequestConfig, urlPathIndicesStats)
 	req.URL.RawQuery = "local=true&format=json"
 
 	var stats []esIndexStats
-	if err := es.doOKDecode(req, &stats); err != nil {
+	if err := web.DoHTTP(es.httpClient).RequestJSON(req, &stats); err != nil {
 		es.Warning(err)
 		return
 	}
@@ -214,13 +212,12 @@ func (es *Elasticsearch) scrapeLocalIndicesStats(ms *esMetrics) {
 }
 
 func (es *Elasticsearch) getClusterName() (string, error) {
-	req, _ := web.NewHTTPRequest(es.Request)
+	req, _ := web.NewHTTPRequest(es.RequestConfig)
 
 	var info struct {
 		ClusterName string `json:"cluster_name"`
 	}
-
-	if err := es.doOKDecode(req, &info); err != nil {
+	if err := web.DoHTTP(es.httpClient).RequestJSON(req, &info); err != nil {
 		return "", err
 	}
 
@@ -229,30 +226,6 @@ func (es *Elasticsearch) getClusterName() (string, error) {
 	}
 
 	return info.ClusterName, nil
-}
-
-func (es *Elasticsearch) doOKDecode(req *http.Request, in interface{}) error {
-	resp, err := es.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(in); err != nil {
-		return fmt.Errorf("error on decoding response from '%s': %v", req.URL, err)
-	}
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
 }
 
 func convertIndexStoreSizeToBytes(size string) int64 {
@@ -289,15 +262,9 @@ func boolToInt(v bool) int64 {
 }
 
 func removeSystemIndices(indices []esIndexStats) []esIndexStats {
-	var i int
-	for _, index := range indices {
-		if strings.HasPrefix(index.Index, ".") {
-			continue
-		}
-		indices[i] = index
-		i++
-	}
-	return indices[:i]
+	return slices.DeleteFunc(indices, func(stats esIndexStats) bool {
+		return strings.HasPrefix(stats.Index, ".")
+	})
 }
 
 func merge(dst, src map[string]int64, prefix string) {

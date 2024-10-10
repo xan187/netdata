@@ -120,40 +120,46 @@ func (cdb *CouchDB) scrapeCouchDB() *cdbMetrics {
 }
 
 func (cdb *CouchDB) scrapeNodeStats(ms *cdbMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(cdb.Request, fmt.Sprintf(urlPathOverviewStats, cdb.Config.Node))
+	req, _ := web.NewHTTPRequestWithPath(cdb.RequestConfig, fmt.Sprintf(urlPathOverviewStats, cdb.Config.Node))
 
 	var stats cdbNodeStats
-	if err := cdb.doOKDecode(req, &stats); err != nil {
+
+	if err := cdb.client().RequestJSON(req, &stats); err != nil {
 		cdb.Warning(err)
 		return
 	}
+
 	ms.NodeStats = &stats
 }
 
 func (cdb *CouchDB) scrapeSystemStats(ms *cdbMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(cdb.Request, fmt.Sprintf(urlPathSystemStats, cdb.Config.Node))
+	req, _ := web.NewHTTPRequestWithPath(cdb.RequestConfig, fmt.Sprintf(urlPathSystemStats, cdb.Config.Node))
 
 	var stats cdbNodeSystem
-	if err := cdb.doOKDecode(req, &stats); err != nil {
+
+	if err := cdb.client().RequestJSON(req, &stats); err != nil {
 		cdb.Warning(err)
 		return
 	}
+
 	ms.NodeSystem = &stats
 }
 
 func (cdb *CouchDB) scrapeActiveTasks(ms *cdbMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(cdb.Request, urlPathActiveTasks)
+	req, _ := web.NewHTTPRequestWithPath(cdb.RequestConfig, urlPathActiveTasks)
 
 	var stats []cdbActiveTask
-	if err := cdb.doOKDecode(req, &stats); err != nil {
+
+	if err := cdb.client().RequestJSON(req, &stats); err != nil {
 		cdb.Warning(err)
 		return
 	}
+
 	ms.ActiveTasks = stats
 }
 
 func (cdb *CouchDB) scrapeDBStats(ms *cdbMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(cdb.Request, urlPathDatabases)
+	req, _ := web.NewHTTPRequestWithPath(cdb.RequestConfig, urlPathDatabases)
 	req.Method = http.MethodPost
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("Content-Type", "application/json")
@@ -170,20 +176,22 @@ func (cdb *CouchDB) scrapeDBStats(ms *cdbMetrics) {
 	req.Body = io.NopCloser(bytes.NewReader(body))
 
 	var stats []cdbDBStats
-	if err := cdb.doOKDecode(req, &stats); err != nil {
+
+	if err := cdb.client().RequestJSON(req, &stats); err != nil {
 		cdb.Warning(err)
 		return
 	}
+
 	ms.DBStats = stats
 }
 
-func findMaxMQSize(MessageQueues map[string]interface{}) int64 {
+func findMaxMQSize(MessageQueues map[string]any) int64 {
 	var maxSize float64
 	for _, mq := range MessageQueues {
 		switch mqSize := mq.(type) {
 		case float64:
 			maxSize = math.Max(maxSize, mqSize)
-		case map[string]interface{}:
+		case map[string]any:
 			if v, ok := mqSize["count"].(float64); ok {
 				maxSize = math.Max(maxSize, v)
 			}
@@ -193,10 +201,11 @@ func findMaxMQSize(MessageQueues map[string]interface{}) int64 {
 }
 
 func (cdb *CouchDB) pingCouchDB() error {
-	req, _ := web.NewHTTPRequest(cdb.Request)
+	req, _ := web.NewHTTPRequest(cdb.RequestConfig)
 
 	var info struct{ Couchdb string }
-	if err := cdb.doOKDecode(req, &info); err != nil {
+
+	if err := cdb.client().RequestJSON(req, &info); err != nil {
 		return err
 	}
 
@@ -207,30 +216,17 @@ func (cdb *CouchDB) pingCouchDB() error {
 	return nil
 }
 
-func (cdb *CouchDB) doOKDecode(req *http.Request, in interface{}) error {
-	resp, err := cdb.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
-
-	// TODO: read resp body, it contains reason
-	// ex.: {"error":"bad_request","reason":"`keys` member must exist."} (400)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(in); err != nil {
-		return fmt.Errorf("error on decoding response from '%s': %v", req.URL, err)
-	}
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
+func (cdb *CouchDB) client() *web.Client {
+	return web.DoHTTP(cdb.httpClient).OnNokCode(func(resp *http.Response) (bool, error) {
+		var msg struct {
+			Error  string `json:"error"`
+			Reason string `json:"reason"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&msg); err == nil && msg.Error != "" {
+			return false, fmt.Errorf("error '%s', reason '%s'", msg.Error, msg.Reason)
+		}
+		return false, nil
+	})
 }
 
 func merge(dst, src map[string]int64, prefix string) {

@@ -4,9 +4,7 @@
 #include "database/KolmogorovSmirnovDist.h"
 
 #define MAX_POINTS 10000
-int enable_metric_correlations = CONFIG_BOOLEAN_YES;
 int metric_correlations_version = 1;
-WEIGHTS_METHOD default_metric_correlations_method = WEIGHTS_METHOD_MC_KS2;
 
 typedef struct weights_stats {
     NETDATA_DOUBLE max_base_high_ratio;
@@ -36,7 +34,7 @@ WEIGHTS_METHOD weights_string_to_method(const char *method) {
         if(strcmp(method, weights_methods[i].name) == 0)
             return weights_methods[i].value;
 
-    return default_metric_correlations_method;
+    return WEIGHTS_METHOD_MC_KS2;
 }
 
 const char *weights_method_to_string(WEIGHTS_METHOD method) {
@@ -44,7 +42,7 @@ const char *weights_method_to_string(WEIGHTS_METHOD method) {
         if(weights_methods[i].value == method)
             return weights_methods[i].name;
 
-    return "unknown";
+    return "ks2";
 }
 
 // ----------------------------------------------------------------------------
@@ -978,6 +976,12 @@ static size_t registered_results_to_json_multinode_group_by(
     BUFFER *key = buffer_create(0, NULL);
     BUFFER *name = buffer_create(0, NULL);
     dfe_start_read(results, t) {
+        char node_uuid[UUID_STR_LEN];
+
+        if(UUIDiszero(t->host->node_id))
+            uuid_unparse_lower(t->host->host_id.uuid, node_uuid);
+        else
+            uuid_unparse_lower(t->host->node_id.uuid, node_uuid);
 
         buffer_flush(key);
         buffer_flush(name);
@@ -998,7 +1002,7 @@ static size_t registered_results_to_json_multinode_group_by(
             if(!(qwd->qwr->group_by.group_by & RRDR_GROUP_BY_NODE)) {
                 buffer_fast_strcat(key, "@", 1);
                 buffer_fast_strcat(name, "@", 1);
-                buffer_strcat(key, t->host->machine_guid);
+                buffer_strcat(key, node_uuid);
                 buffer_strcat(name, rrdhost_hostname(t->host));
             }
         }
@@ -1008,7 +1012,7 @@ static size_t registered_results_to_json_multinode_group_by(
                 buffer_fast_strcat(name, ",", 1);
             }
 
-            buffer_strcat(key, t->host->machine_guid);
+            buffer_strcat(key, node_uuid);
             buffer_strcat(name, rrdhost_hostname(t->host));
         }
         if(qwd->qwr->group_by.group_by & RRDR_GROUP_BY_CONTEXT) {

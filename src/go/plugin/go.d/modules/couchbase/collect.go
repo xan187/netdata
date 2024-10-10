@@ -3,10 +3,7 @@
 package couchbase
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
@@ -112,41 +109,18 @@ func (cb *Couchbase) addDimToChart(chartID string, dim *module.Dim) {
 }
 
 func (cb *Couchbase) scrapeCouchbase() (*cbMetrics, error) {
-	req, err := web.NewHTTPRequestWithPath(cb.Request, urlPathBucketsStats)
+	req, err := web.NewHTTPRequestWithPath(cb.RequestConfig, urlPathBucketsStats)
 	if err != nil {
 		return nil, err
 	}
 	req.URL.RawQuery = url.Values{"skipMap": []string{"true"}}.Encode()
 
 	ms := &cbMetrics{}
-	if err := cb.doOKDecode(req, &ms.BucketsBasicStats); err != nil {
+	if err := web.DoHTTP(cb.httpClient).RequestJSON(req, &ms.BucketsBasicStats); err != nil {
 		return nil, err
 	}
+
 	return ms, nil
-}
-
-func (cb *Couchbase) doOKDecode(req *http.Request, in interface{}) error {
-	resp, err := cb.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(in); err != nil {
-		return fmt.Errorf("error on decoding response from '%s': %v", req.URL, err)
-	}
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
 }
 
 func indexDimID(name, metric string) string {

@@ -1153,7 +1153,10 @@ static void netdata_systemd_units_function_help(const char *transaction) {
     );
 
     netdata_mutex_lock(&stdout_mutex);
-    pluginsd_function_result_to_stdout(transaction, HTTP_RESP_OK, "text/plain", now_realtime_sec() + 3600, wb);
+    wb->response_code = HTTP_RESP_OK;
+    wb->content_type = CT_TEXT_PLAIN;
+    wb->expires = now_realtime_sec() + 3600;
+    pluginsd_function_result_to_stdout(transaction, wb);
     netdata_mutex_unlock(&stdout_mutex);
 
     buffer_free(wb);
@@ -1169,7 +1172,10 @@ static void netdata_systemd_units_function_info(const char *transaction) {
 
     buffer_json_finalize(wb);
     netdata_mutex_lock(&stdout_mutex);
-    pluginsd_function_result_to_stdout(transaction, HTTP_RESP_OK, "text/plain", now_realtime_sec() + 3600, wb);
+    wb->response_code = HTTP_RESP_OK;
+    wb->content_type = CT_TEXT_PLAIN;
+    wb->expires = now_realtime_sec() + 3600;
+    pluginsd_function_result_to_stdout(transaction, wb);
     netdata_mutex_unlock(&stdout_mutex);
 
     buffer_free(wb);
@@ -1601,7 +1607,7 @@ void function_systemd_units(const char *transaction, char *function,
                             BUFFER *payload __maybe_unused, HTTP_ACCESS access __maybe_unused,
                             const char *source __maybe_unused, void *data __maybe_unused) {
     char *words[SYSTEMD_UNITS_MAX_PARAMS] = { NULL };
-    size_t num_words = quoted_strings_splitter_pluginsd(function, words, SYSTEMD_UNITS_MAX_PARAMS);
+    size_t num_words = quoted_strings_splitter_whitespace(function, words, SYSTEMD_UNITS_MAX_PARAMS);
     for(int i = 1; i < SYSTEMD_UNITS_MAX_PARAMS ;i++) {
         char *keyword = get_word(words, num_words, i);
         if(!keyword) break;
@@ -1958,7 +1964,10 @@ void function_systemd_units(const char *transaction, char *function,
     buffer_json_finalize(wb);
 
     netdata_mutex_lock(&stdout_mutex);
-    pluginsd_function_result_to_stdout(transaction, HTTP_RESP_OK, "application/json", now_realtime_sec() + 1, wb);
+    wb->response_code = HTTP_RESP_OK;
+    wb->content_type = CT_APPLICATION_JSON;
+    wb->expires = now_realtime_sec() + 1;
+    pluginsd_function_result_to_stdout(transaction, wb);
     netdata_mutex_unlock(&stdout_mutex);
 
     buffer_free(wb);

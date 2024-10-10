@@ -1,13 +1,3 @@
-<!--
-title: "Health API Calls"
-date: 2020-04-27
-custom_edit_url: https://github.com/netdata/netdata/edit/master/src/web/api/health/README.md
-sidebar_label: "Health API Calls"
-learn_status: "Published"
-learn_topic_type: "References"
-learn_rel_path: "Developers/Web/Api"
--->
-
 # Health API Calls
 
 ## Health Read API
@@ -33,7 +23,7 @@ The size of the alert log is configured in `netdata.conf`. There are 2 settings:
 ```
 [health]
 	in memory max health log entries = 1000
-	health log history = 432000
+	health log retention = 5d
 ```
 
 The API call retrieves all entries of the alert log:

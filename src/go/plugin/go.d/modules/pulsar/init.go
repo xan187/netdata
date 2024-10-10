@@ -5,7 +5,7 @@ package pulsar
 import (
 	"errors"
 
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/prometheus"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
@@ -18,12 +18,12 @@ func (p *Pulsar) validateConfig() error {
 }
 
 func (p *Pulsar) initPrometheusClient() (prometheus.Prometheus, error) {
-	client, err := web.NewHTTPClient(p.Client)
+	client, err := web.NewHTTPClient(p.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	return prometheus.New(client, p.Request), nil
+	return prometheus.New(client, p.RequestConfig), nil
 }
 
 func (p *Pulsar) initTopicFilerMatcher() (matcher.Matcher, error) {

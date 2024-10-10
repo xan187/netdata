@@ -18,14 +18,14 @@ FROM
 `
 
 func (c *ClickHouse) collectSystemMetrics(mx map[string]int64) error {
-	req, _ := web.NewHTTPRequest(c.Request)
+	req, _ := web.NewHTTPRequest(c.RequestConfig)
 	req.URL.RawQuery = makeURLQuery(querySystemMetrics)
 
 	px := "metrics_"
 	var metric string
 	var n int
 
-	err := c.doOKDecodeCSV(req, func(column, value string, lineEnd bool) {
+	err := c.doHTTP(req, func(column, value string, lineEnd bool) {
 		switch column {
 		case "metric":
 			metric = value

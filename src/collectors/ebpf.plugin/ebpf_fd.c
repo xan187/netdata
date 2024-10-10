@@ -46,9 +46,7 @@ static ebpf_local_maps_t fd_maps[] = {{.name = "tbl_fd_pid", .internal_input = N
                                        }};
 
 
-struct config fd_config = { .first_section = NULL, .last_section = NULL, .mutex = NETDATA_MUTEX_INITIALIZER,
-                           .index = {.avl_tree = { .root = NULL, .compar = appconfig_section_compare },
-                                     .rwlock = AVL_LOCK_INITIALIZER } };
+struct config fd_config = APPCONFIG_INITIALIZER;
 
 static netdata_idx_t fd_hash_values[NETDATA_FD_COUNTER];
 static netdata_idx_t *fd_values = NULL;
@@ -683,9 +681,8 @@ static void fd_apps_accumulator(netdata_fd_stat_t *out, int maps_per_core)
  * Read the apps table and store data inside the structure.
  *
  * @param maps_per_core do I need to read all cores?
- * @param max_period    limit of iterations without updates before remove data from hash table
  */
-static void ebpf_read_fd_apps_table(int maps_per_core, uint32_t max_period)
+static void ebpf_read_fd_apps_table(int maps_per_core)
 {
     netdata_fd_stat_t *fv = fd_vector;
     int fd = fd_maps[NETDATA_FD_PID_STATS].map_fd;
@@ -799,7 +796,6 @@ void *ebpf_read_fd_thread(void *ptr)
     uint32_t lifetime = em->lifetime;
     uint32_t running_time = 0;
     int period = USEC_PER_SEC;
-    uint32_t max_period = EBPF_CLEANUP_FACTOR;
     pids_fd[EBPF_PIDS_FD_IDX] = fd_maps[NETDATA_FD_PID_STATS].map_fd;
     while (!ebpf_plugin_stop() && running_time < lifetime) {
         (void)heartbeat_next(&hb, period);
@@ -807,7 +803,7 @@ void *ebpf_read_fd_thread(void *ptr)
             continue;
 
         pthread_mutex_lock(&collect_data_mutex);
-        ebpf_read_fd_apps_table(maps_per_core, max_period);
+        ebpf_read_fd_apps_table(maps_per_core);
         ebpf_fd_resume_apps_data();
         pthread_mutex_unlock(&collect_data_mutex);
 

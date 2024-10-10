@@ -1,12 +1,3 @@
-<!--
-title: "StatsD"
-description: "The Netdata Agent is a fully-featured StatsD server that collects metrics from any custom application and visualizes them in real-time."
-custom_edit_url: "https://github.com/netdata/netdata/edit/master/src/collectors/statsd.plugin/README.md"
-sidebar_label: "StatsD"
-learn_status: "Published"
-learn_rel_path: "Integrations/Monitor/Anything"
--->
-
 # StatsD
 
 [StatsD](https://github.com/statsd/statsd) is a system to collect data from any application. Applications send metrics to it, 
@@ -170,11 +161,11 @@ You can find the configuration at `/etc/netdata/netdata.conf`:
 [statsd]
 	# enabled = yes
 	# decimal detail = 1000
-	# update every (flushInterval) = 1
+	# update every (flushInterval) = 1s
 	# udp messages to process at once = 10
 	# create private charts for metrics matching = *
 	# max private charts hard limit = 1000
-	# cleanup obsolete charts after secs = 0
+	# cleanup obsolete charts after = 0
 	# private charts memory mode = save
 	# private charts history = 3996
 	# histograms and timers percentile (percentThreshold) = 95.00000
@@ -204,7 +195,7 @@ You can find the configuration at `/etc/netdata/netdata.conf`:
 
      is a space separated list of IPs and ports to listen to. The format is `PROTOCOL:IP:PORT` - if `PORT` is omitted, the `default port` will be used. If `IP` is IPv6, it needs to be enclosed in `[]`. `IP` can also be `*` (to listen on all IPs) or even a hostname.
 
--   `update every (flushInterval) = 1` seconds, controls the frequency StatsD will push the collected metrics to Netdata charts.
+-   `update every (flushInterval) = 1s` controls the frequency StatsD will push the collected metrics to Netdata charts.
 
 -   `decimal detail = 1000` controls the number of fractional digits in gauges and histograms. Netdata collects metrics using signed 64-bit integers and their fractional detail is controlled using multipliers and divisors. This setting is used to multiply all collected values to convert them to integers and is also set as the divisors, so that the final data will be a floating point number with this fractional detail (1000 = X.0 - X.999, 10000 = X.0 - X.9999, etc).
 
@@ -238,7 +229,7 @@ The default behavior is to use the same settings as the rest of the Netdata Agen
 
 For optimization reasons, Netdata imposes a hard limit on private metric charts. The limit is set via the `max private charts hard limit` setting (which defaults to 1000 charts). Metrics above this hard limit are still collected, but they can only be used in synthetic charts (once a metric is added to chart, it will be sent to backend servers too).
 
-If you have many ephemeral metrics collected (i.e. that you collect values for a certain amount of time), you can set the configuration option `set charts as obsolete after secs`. Setting a value in seconds here, means that Netdata will mark those metrics (and their private charts) as obsolete after the specified time has passed since the last sent metric value. Those charts will later be deleted according to the setting in `cleanup obsolete charts after secs`. Setting `set charts as obsolete after secs` to 0 (which is also the default value) will disable this functionality.
+If you have many ephemeral metrics collected (i.e. that you collect values for a certain amount of time), you can set the configuration option `set charts as obsolete after`. Setting a value in seconds here, means that Netdata will mark those metrics (and their private charts) as obsolete after the specified time has passed since the last sent metric value. Those charts will later be deleted according to the setting in `cleanup obsolete charts after`. Setting `set charts as obsolete after` to 0 (which is also the default value) will disable this functionality.
 
 Example private charts (automatically generated without any configuration):
 
@@ -785,7 +776,7 @@ visualize all the available operations.
 
 Start by creating a new configuration file under the `statsd.d/` folder in the 
 [Netdata config directory](/docs/netdata-agent/configuration/README.md#the-netdata-config-directory). 
-Use [`edit-config`](/docs/netdata-agent/configuration/README.md#edit-netdataconf) 
+Use [`edit-config`](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) 
 to create a new file called `k6.conf`.
 
 ```bash=
@@ -794,7 +785,7 @@ sudo ./edit-config statsd.d/k6.conf
 
 Copy the following configuration into your file as a starting point.
 
-```conf
+```text
 [app]
     name = k6
     metrics = k6*

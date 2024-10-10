@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
 
@@ -27,7 +27,7 @@ func (hc *HTTPCheck) validateConfig() error {
 }
 
 func (hc *HTTPCheck) initHTTPClient() (*http.Client, error) {
-	return web.NewHTTPClient(hc.Client)
+	return web.NewHTTPClient(hc.ClientConfig)
 }
 
 func (hc *HTTPCheck) initResponseMatchRegexp() (*regexp.Regexp, error) {

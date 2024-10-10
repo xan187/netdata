@@ -39,14 +39,15 @@ typedef enum __attribute__ ((__packed__)) {
 } BUFFER_JSON_OPTIONS;
 
 typedef struct web_buffer {
-    size_t size;            // allocation size of buffer, in bytes
-    size_t len;             // current data length in buffer, in bytes
-    char *buffer;           // the buffer itself
+    uint32_t size;          // allocation size of buffer, in bytes
+    uint32_t len;           // current data length in buffer, in bytes
     HTTP_CONTENT_TYPE content_type;    // the content type of the data in the buffer
     BUFFER_OPTIONS options; // options related to the content
+    uint16_t response_code;
     time_t date;            // the timestamp this content has been generated
     time_t expires;         // the timestamp this content expires
     size_t *statistics;
+    char *buffer;           // the buffer itself
 
     struct {
         char key_quote[BUFFER_QUOTE_MAX_SIZE + 1];
@@ -62,7 +63,7 @@ typedef struct web_buffer {
 #define buffer_cacheable(wb)    do { (wb)->options |= WB_CONTENT_CACHEABLE;    if((wb)->options & WB_CONTENT_NO_CACHEABLE) (wb)->options &= ~WB_CONTENT_NO_CACHEABLE; } while(0)
 #define buffer_no_cacheable(wb) do { (wb)->options |= WB_CONTENT_NO_CACHEABLE; if((wb)->options & WB_CONTENT_CACHEABLE)    (wb)->options &= ~WB_CONTENT_CACHEABLE;  (wb)->expires = 0; } while(0)
 
-#define buffer_strlen(wb) ((wb)->len)
+#define buffer_strlen(wb) (size_t)((wb)->len)
 
 #define BUFFER_OVERFLOW_EOF "EOF"
 
@@ -413,6 +414,16 @@ static inline char *print_uint64_hex_reversed(char *dst, uint64_t value) {
 #endif
 }
 
+static inline char *print_uint64_hex_reversed_full(char *dst, uint64_t value) {
+    char *d = dst;
+    for(size_t c = 0; c < sizeof(uint64_t) * 2; c++) {
+        *d++ = hex_digits[value & 0xf];
+        value >>= 4;
+    }
+
+    return d;
+}
+
 static inline char *print_uint64_base64_reversed(char *dst, uint64_t value) {
     char *d = dst;
     do *d++ = base64_digits[value & 63]; while ((value >>= 6));
@@ -488,47 +499,79 @@ static inline int print_netdata_double(char *dst, NETDATA_DOUBLE value) {
     return (int)(d - dst);
 }
 
-static inline void buffer_print_uint64(BUFFER *wb, uint64_t value) {
-    buffer_need_bytes(wb, 50);
-
-    char *s = &wb->buffer[wb->len];
+static inline size_t print_uint64(char *dst, uint64_t value) {
+    char *s = dst;
     char *d = print_uint64_reversed(s, value);
     char_array_reverse(s, d - 1);
     *d = '\0';
-    wb->len += d - s;
+    return d - s;
+}
 
+static inline size_t print_int64(char *dst, int64_t value) {
+    size_t len = 0;
+
+    if(value < 0) {
+        *dst++ = '-';
+        value = -value;
+        len++;
+    }
+
+    return print_uint64(dst, value) + len;
+}
+
+#define UINT64_MAX_LENGTH (24) // 21 should be enough
+static inline void buffer_print_uint64(BUFFER *wb, uint64_t value) {
+    buffer_need_bytes(wb, 50);
+    wb->len += print_uint64(&wb->buffer[wb->len], value);
     buffer_overflow_check(wb);
 }
 
 static inline void buffer_print_int64(BUFFER *wb, int64_t value) {
     buffer_need_bytes(wb, 50);
-
-    if(value < 0) {
-        buffer_fast_strcat(wb, "-", 1);
-        value = -value;
-    }
-
-    buffer_print_uint64(wb, (uint64_t)value);
-
+    wb->len += print_int64(&wb->buffer[wb->len], value);
     buffer_overflow_check(wb);
+}
+
+#define UINT64_HEX_MAX_LENGTH ((sizeof(HEX_PREFIX) - 1) + (sizeof(uint64_t) * 2) + 1)
+static inline size_t print_uint64_hex(char *dst, uint64_t value) {
+    char *d = dst;
+
+    const char *s = HEX_PREFIX;
+    while(*s) *d++ = *s++;
+
+    char *e = print_uint64_hex_reversed(d, value);
+    char_array_reverse(d, e - 1);
+    *e = '\0';
+    return e - dst;
+}
+
+static inline size_t print_uint64_hex_full(char *dst, uint64_t value) {
+    char *d = dst;
+
+    const char *s = HEX_PREFIX;
+    while(*s) *d++ = *s++;
+
+    char *e = print_uint64_hex_reversed_full(d, value);
+    char_array_reverse(d, e - 1);
+    *e = '\0';
+    return e - dst;
 }
 
 static inline void buffer_print_uint64_hex(BUFFER *wb, uint64_t value) {
-    buffer_need_bytes(wb, sizeof(uint64_t) * 2 + 2 + 1);
-
-    buffer_fast_strcat(wb, HEX_PREFIX, sizeof(HEX_PREFIX) - 1);
-
-    char *s = &wb->buffer[wb->len];
-    char *d = print_uint64_hex_reversed(s, value);
-    char_array_reverse(s, d - 1);
-    *d = '\0';
-    wb->len += d - s;
-
+    buffer_need_bytes(wb, UINT64_HEX_MAX_LENGTH);
+    wb->len += print_uint64_hex(&wb->buffer[wb->len], value);
     buffer_overflow_check(wb);
 }
 
+static inline void buffer_print_uint64_hex_full(BUFFER *wb, uint64_t value) {
+    buffer_need_bytes(wb, UINT64_HEX_MAX_LENGTH);
+    wb->len += print_uint64_hex_full(&wb->buffer[wb->len], value);
+    buffer_overflow_check(wb);
+}
+
+#define UINT64_B64_MAX_LENGTH ((sizeof(IEEE754_UINT64_B64_PREFIX) - 1) + (sizeof(uint64_t) * 2) + 1)
 static inline void buffer_print_uint64_base64(BUFFER *wb, uint64_t value) {
-    buffer_need_bytes(wb, sizeof(uint64_t) * 2 + 2 + 1);
+    buffer_need_bytes(wb, UINT64_B64_MAX_LENGTH);
 
     buffer_fast_strcat(wb, IEEE754_UINT64_B64_PREFIX, sizeof(IEEE754_UINT64_B64_PREFIX) - 1);
 
@@ -567,8 +610,9 @@ static inline void buffer_print_int64_base64(BUFFER *wb, int64_t value) {
     buffer_overflow_check(wb);
 }
 
+#define DOUBLE_MAX_LENGTH (512) // 318 should be enough, including null
 static inline void buffer_print_netdata_double(BUFFER *wb, NETDATA_DOUBLE value) {
-    buffer_need_bytes(wb, 512 + 2);
+    buffer_need_bytes(wb, DOUBLE_MAX_LENGTH);
 
     if(isnan(value) || isinf(value)) {
         buffer_fast_strcat(wb, "null", 4);
@@ -584,8 +628,9 @@ static inline void buffer_print_netdata_double(BUFFER *wb, NETDATA_DOUBLE value)
     buffer_overflow_check(wb);
 }
 
+#define DOUBLE_HEX_MAX_LENGTH ((sizeof(IEEE754_DOUBLE_HEX_PREFIX) - 1) + (sizeof(uint64_t) * 2) + 1)
 static inline void buffer_print_netdata_double_hex(BUFFER *wb, NETDATA_DOUBLE value) {
-    buffer_need_bytes(wb, sizeof(uint64_t) * 2 + 2 + 1 + 1);
+    buffer_need_bytes(wb, DOUBLE_HEX_MAX_LENGTH);
 
     uint64_t *ptr = (uint64_t *) (&value);
     buffer_fast_strcat(wb, IEEE754_DOUBLE_HEX_PREFIX, sizeof(IEEE754_DOUBLE_HEX_PREFIX) - 1);
@@ -599,8 +644,9 @@ static inline void buffer_print_netdata_double_hex(BUFFER *wb, NETDATA_DOUBLE va
     buffer_overflow_check(wb);
 }
 
+#define DOUBLE_B64_MAX_LENGTH ((sizeof(IEEE754_DOUBLE_B64_PREFIX) - 1) + (sizeof(uint64_t) * 2) + 1)
 static inline void buffer_print_netdata_double_base64(BUFFER *wb, NETDATA_DOUBLE value) {
-    buffer_need_bytes(wb, sizeof(uint64_t) * 2 + 2 + 1 + 1);
+    buffer_need_bytes(wb, DOUBLE_B64_MAX_LENGTH);
 
     uint64_t *ptr = (uint64_t *) (&value);
     buffer_fast_strcat(wb, IEEE754_DOUBLE_B64_PREFIX, sizeof(IEEE754_DOUBLE_B64_PREFIX) - 1);
@@ -1072,6 +1118,7 @@ typedef enum __attribute__((packed)) {
     RRDF_FIELD_TRANSFORM_DURATION_S,  // transform as duration in second to a human-readable duration
     RRDF_FIELD_TRANSFORM_DATETIME_MS,  // UNIX epoch timestamp in ms
     RRDF_FIELD_TRANSFORM_DATETIME_USEC,  // UNIX epoch timestamp in usec
+    RRDF_FIELD_TRANSFORM_XML,   // format the field with an XML prettifier
 } RRDF_FIELD_TRANSFORM;
 
 static inline const char *rrdf_field_transform_to_string(RRDF_FIELD_TRANSFORM transform) {
@@ -1091,6 +1138,9 @@ static inline const char *rrdf_field_transform_to_string(RRDF_FIELD_TRANSFORM tr
 
         case RRDF_FIELD_TRANSFORM_DATETIME_USEC:
             return "datetime_usec";
+
+        case RRDF_FIELD_TRANSFORM_XML:
+            return "xml";
     }
 }
 

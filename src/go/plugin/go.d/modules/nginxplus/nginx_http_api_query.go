@@ -3,10 +3,8 @@
 package nginxplus
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"sync"
 
@@ -46,10 +44,10 @@ type nginxMetrics struct {
 }
 
 func (n *NginxPlus) queryAPIVersion() (int64, error) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, urlPathAPIVersions)
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, urlPathAPIVersions)
 
 	var versions nginxAPIVersions
-	if err := n.doWithDecode(&versions, req); err != nil {
+	if err := n.doHTTP(req, &versions); err != nil {
 		return 0, err
 	}
 
@@ -61,10 +59,10 @@ func (n *NginxPlus) queryAPIVersion() (int64, error) {
 }
 
 func (n *NginxPlus) queryAvailableEndpoints() error {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIEndpointsRoot, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIEndpointsRoot, n.apiVersion))
 
 	var endpoints []string
-	if err := n.doWithDecode(&endpoints, req); err != nil {
+	if err := n.doHTTP(req, &endpoints); err != nil {
 		return err
 	}
 
@@ -89,9 +87,9 @@ func (n *NginxPlus) queryAvailableEndpoints() error {
 
 	if hasHTTP {
 		endpoints = endpoints[:0]
-		req, _ = web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIEndpointsHTTP, n.apiVersion))
+		req, _ = web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIEndpointsHTTP, n.apiVersion))
 
-		if err := n.doWithDecode(&endpoints, req); err != nil {
+		if err := n.doHTTP(req, &endpoints); err != nil {
 			return err
 		}
 
@@ -114,9 +112,9 @@ func (n *NginxPlus) queryAvailableEndpoints() error {
 
 	if hasStream {
 		endpoints = endpoints[:0]
-		req, _ = web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIEndpointsStream, n.apiVersion))
+		req, _ = web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIEndpointsStream, n.apiVersion))
 
-		if err := n.doWithDecode(&endpoints, req); err != nil {
+		if err := n.doHTTP(req, &endpoints); err != nil {
 			return err
 		}
 
@@ -167,11 +165,11 @@ func (n *NginxPlus) queryMetrics() *nginxMetrics {
 }
 
 func (n *NginxPlus) queryNginxInfo(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPINginx, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPINginx, n.apiVersion))
 
 	var v nginxInfo
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.nginx = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -181,11 +179,11 @@ func (n *NginxPlus) queryNginxInfo(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryConnections(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIConnections, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIConnections, n.apiVersion))
 
 	var v nginxConnections
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.connections = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -195,11 +193,11 @@ func (n *NginxPlus) queryConnections(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) querySSL(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPISSL, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPISSL, n.apiVersion))
 
 	var v nginxSSL
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.ssl = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -209,11 +207,11 @@ func (n *NginxPlus) querySSL(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryHTTPRequests(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIHTTPRequests, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIHTTPRequests, n.apiVersion))
 
 	var v nginxHTTPRequests
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.httpRequest = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -223,11 +221,11 @@ func (n *NginxPlus) queryHTTPRequests(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryHTTPServerZones(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIHTTPServerZones, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIHTTPServerZones, n.apiVersion))
 
 	var v nginxHTTPServerZones
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.httpServerZones = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -237,11 +235,11 @@ func (n *NginxPlus) queryHTTPServerZones(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryHTTPLocationZones(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIHTTPLocationZones, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIHTTPLocationZones, n.apiVersion))
 
 	var v nginxHTTPLocationZones
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.httpLocationZones = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -251,11 +249,11 @@ func (n *NginxPlus) queryHTTPLocationZones(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryHTTPUpstreams(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIHTTPUpstreams, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIHTTPUpstreams, n.apiVersion))
 
 	var v nginxHTTPUpstreams
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.httpUpstreams = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -265,11 +263,11 @@ func (n *NginxPlus) queryHTTPUpstreams(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryHTTPCaches(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIHTTPCaches, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIHTTPCaches, n.apiVersion))
 
 	var v nginxHTTPCaches
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.httpCaches = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -279,11 +277,11 @@ func (n *NginxPlus) queryHTTPCaches(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryStreamServerZones(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIStreamServerZones, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIStreamServerZones, n.apiVersion))
 
 	var v nginxStreamServerZones
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.streamServerZones = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -293,11 +291,11 @@ func (n *NginxPlus) queryStreamServerZones(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryStreamUpstreams(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIStreamUpstreams, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIStreamUpstreams, n.apiVersion))
 
 	var v nginxStreamUpstreams
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.streamUpstreams = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -307,11 +305,11 @@ func (n *NginxPlus) queryStreamUpstreams(ms *nginxMetrics) {
 }
 
 func (n *NginxPlus) queryResolvers(ms *nginxMetrics) {
-	req, _ := web.NewHTTPRequestWithPath(n.Request, fmt.Sprintf(urlPathAPIResolvers, n.apiVersion))
+	req, _ := web.NewHTTPRequestWithPath(n.RequestConfig, fmt.Sprintf(urlPathAPIResolvers, n.apiVersion))
 
 	var v nginxResolvers
 
-	if err := n.doWithDecode(&v, req); err != nil {
+	if err := n.doHTTP(req, &v); err != nil {
 		n.endpoints.resolvers = !errors.Is(err, errPathNotFound)
 		n.Warning(err)
 		return
@@ -324,38 +322,17 @@ var (
 	errPathNotFound = errors.New("path not found")
 )
 
-func (n *NginxPlus) doWithDecode(dst interface{}, req *http.Request) error {
+func (n *NginxPlus) doHTTP(req *http.Request, dst any) error {
 	n.Debugf("executing %s '%s'", req.Method, req.URL)
-	resp, err := n.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer closeBody(resp)
 
-	if resp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("%s returned %d status code (%w)", req.URL, resp.StatusCode, errPathNotFound)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s returned %d status code (%s)", req.URL, resp.StatusCode, resp.Status)
-	}
+	cl := web.DoHTTP(n.httpClient).OnNokCode(func(resp *http.Response) (bool, error) {
+		if resp.StatusCode == http.StatusNotFound {
+			return false, errPathNotFound
+		}
+		return false, nil
+	})
 
-	content, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("error on reading response from %s : %v", req.URL, err)
-	}
-
-	if err := json.Unmarshal(content, dst); err != nil {
-		return fmt.Errorf("error on parsing response from %s : %v", req.URL, err)
-	}
-
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
+	return cl.RequestJSON(req, dst)
 }
 
 func (n *nginxMetrics) empty() bool {

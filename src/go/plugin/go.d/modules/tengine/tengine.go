@@ -5,9 +5,11 @@ package tengine
 import (
 	_ "embed"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
 
@@ -25,12 +27,12 @@ func init() {
 func New() *Tengine {
 	return &Tengine{
 		Config: Config{
-			HTTP: web.HTTP{
-				Request: web.Request{
+			HTTPConfig: web.HTTPConfig{
+				RequestConfig: web.RequestConfig{
 					URL: "http://127.0.0.1/us",
 				},
-				Client: web.Client{
-					Timeout: web.Duration(time.Second * 2),
+				ClientConfig: web.ClientConfig{
+					Timeout: confopt.Duration(time.Second * 2),
 				},
 			},
 		},
@@ -39,8 +41,8 @@ func New() *Tengine {
 }
 
 type Config struct {
-	UpdateEvery int `yaml:"update_every,omitempty" json:"update_every"`
-	web.HTTP    `yaml:",inline" json:""`
+	UpdateEvery    int `yaml:"update_every,omitempty" json:"update_every"`
+	web.HTTPConfig `yaml:",inline" json:""`
 }
 
 type Tengine struct {
@@ -49,7 +51,7 @@ type Tengine struct {
 
 	charts *module.Charts
 
-	apiClient *apiClient
+	httpClient *http.Client
 }
 
 func (t *Tengine) Configuration() any {
@@ -62,13 +64,12 @@ func (t *Tengine) Init() error {
 		return errors.New("url not set")
 	}
 
-	client, err := web.NewHTTPClient(t.Client)
+	httpClient, err := web.NewHTTPClient(t.ClientConfig)
 	if err != nil {
 		t.Errorf("error on creating http client : %v", err)
 		return err
 	}
-
-	t.apiClient = newAPIClient(client, t.Request)
+	t.httpClient = httpClient
 
 	t.Debugf("using URL: %s", t.URL)
 	t.Debugf("using timeout: %s", t.Timeout)
@@ -82,9 +83,11 @@ func (t *Tengine) Check() error {
 		t.Error(err)
 		return err
 	}
+
 	if len(mx) == 0 {
 		return errors.New("no metrics collected")
 	}
+
 	return nil
 }
 
@@ -94,9 +97,12 @@ func (t *Tengine) Charts() *module.Charts {
 
 func (t *Tengine) Collect() map[string]int64 {
 	mx, err := t.collect()
-
 	if err != nil {
 		t.Error(err)
+		return nil
+	}
+
+	if len(mx) == 0 {
 		return nil
 	}
 
@@ -104,7 +110,7 @@ func (t *Tengine) Collect() map[string]int64 {
 }
 
 func (t *Tengine) Cleanup() {
-	if t.apiClient != nil && t.apiClient.httpClient != nil {
-		t.apiClient.httpClient.CloseIdleConnections()
+	if t.httpClient != nil {
+		t.httpClient.CloseIdleConnections()
 	}
 }

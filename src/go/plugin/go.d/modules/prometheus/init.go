@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/prometheus"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
@@ -20,12 +20,12 @@ func (p *Prometheus) validateConfig() error {
 }
 
 func (p *Prometheus) initPrometheusClient() (prometheus.Prometheus, error) {
-	httpClient, err := web.NewHTTPClient(p.Client)
+	httpClient, err := web.NewHTTPClient(p.ClientConfig)
 	if err != nil {
 		return nil, fmt.Errorf("init HTTP client: %v", err)
 	}
 
-	req := p.Request.Copy()
+	req := p.RequestConfig.Copy()
 	if p.BearerTokenFile != "" {
 		token, err := os.ReadFile(p.BearerTokenFile)
 		if err != nil {

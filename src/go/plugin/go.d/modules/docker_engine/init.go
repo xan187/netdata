@@ -4,9 +4,9 @@ package docker_engine
 
 import (
 	"errors"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/prometheus"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
 
 func (de *DockerEngine) validateConfig() error {
@@ -17,9 +17,9 @@ func (de *DockerEngine) validateConfig() error {
 }
 
 func (de *DockerEngine) initPrometheusClient() (prometheus.Prometheus, error) {
-	client, err := web.NewHTTPClient(de.Client)
+	client, err := web.NewHTTPClient(de.ClientConfig)
 	if err != nil {
 		return nil, err
 	}
-	return prometheus.New(client, de.Request), nil
+	return prometheus.New(client, de.RequestConfig), nil
 }

@@ -19,6 +19,7 @@ typedef enum __attribute__((packed)) {
 #define OPENSSL_VERSION_300 0x30000000L
 
 #  include <openssl/ssl.h>
+#  include <openssl/rand.h>
 #  include <openssl/err.h>
 #  include <openssl/evp.h>
 #  include <openssl/pem.h>
@@ -50,7 +51,7 @@ extern const char *tls_version;
 extern const char *tls_ciphers;
 extern bool netdata_ssl_validate_certificate;
 extern bool netdata_ssl_validate_certificate_sender;
-int ssl_security_location_for_context(SSL_CTX *ctx,char *file,char *path);
+int ssl_security_location_for_context(SSL_CTX *ctx, const char *file, const char *path);
 
 void netdata_ssl_initialize_openssl();
 void netdata_ssl_cleanup();

@@ -3,7 +3,7 @@
 # On MSYS2, install these dependencies to build netdata:
 install_dependencies() {
     pacman -S \
-        git cmake ninja base-devel msys2-devel \
+        git cmake ninja clang base-devel msys2-devel \
         libyaml-devel libzstd-devel libutil-linux libutil-linux-devel \
         mingw-w64-x86_64-toolchain mingw-w64-ucrt-x86_64-toolchain \
         mingw64/mingw-w64-x86_64-mold ucrt64/mingw-w64-ucrt-x86_64-mold \
@@ -51,28 +51,37 @@ fi
 
 set -exu -o pipefail
 
-if [ -d "${build}" ]
+if [ ! -d "${build}" ]
 then
-	rm -rf "${build}"
+  /usr/bin/cmake -S "${WT_ROOT}" -B "${build}" \
+      -G Ninja \
+      -DCMAKE_INSTALL_PREFIX="/opt/netdata" \
+      -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
+      -DCMAKE_C_FLAGS="-fstack-protector-all -O0 -ggdb -Wall -Wextra -Wno-char-subscripts -Wa,-mbig-obj -pipe -DNETDATA_INTERNAL_CHECKS=1 -D_FILE_OFFSET_BITS=64 -D__USE_MINGW_ANSI_STDIO=1" \
+      -DBUILD_FOR_PACKAGING=${BUILD_FOR_PACKAGING} \
+      -DUSE_MOLD=Off \
+      -DNETDATA_USER="${USER}" \
+      -DDEFAULT_FEATURE_STATE=Off \
+      -DENABLE_H2O=Off \
+      -DENABLE_ML=On \
+      -DENABLE_BUNDLED_JSONC=On \
+      -DENABLE_BUNDLED_PROTOBUF=Off \
+      -DENABLE_PLUGIN_APPS=On \
+      ${NULL}
 fi
-
-/usr/bin/cmake -S "${WT_ROOT}" -B "${build}" \
-    -G Ninja \
-    -DCMAKE_INSTALL_PREFIX="/opt/netdata" \
-    -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-    -DCMAKE_C_FLAGS="-fstack-protector-all -O0 -ggdb -Wall -Wextra -Wno-char-subscripts -Wa,-mbig-obj -pipe -DNETDATA_INTERNAL_CHECKS=1 -D_FILE_OFFSET_BITS=64 -D__USE_MINGW_ANSI_STDIO=1" \
-    -DBUILD_FOR_PACKAGING=${BUILD_FOR_PACKAGING} \
-    -DUSE_MOLD=Off \
-    -DNETDATA_USER="${USER}" \
-    -DDEFAULT_FEATURE_STATE=Off \
-    -DENABLE_H2O=Off \
-    -DENABLE_ML=On \
-    -DENABLE_BUNDLED_JSONC=On \
-    -DENABLE_BUNDLED_PROTOBUF=Off \
-    ${NULL}
 
 ninja -v -C "${build}" install || ninja -v -C "${build}" -j 1
 
-echo
-echo "Compile with:"
-echo "ninja -v -C \"${build}\" install || ninja -v -C \"${build}\" -j 1"
+#echo
+#echo "Compile with:"
+#echo "ninja -v -C \"${build}\" install || ninja -v -C \"${build}\" -j 1"
+
+echo "Stopping service Netdata"
+sc stop "Netdata" || echo "Failed"
+
+echo "starting netdata..."
+# enable JIT debug with gdb
+export MSYS="error_start:$(cygpath -w /usr/bin/gdb)"
+
+rm -rf /opt/netdata/var/log/netdata/*.log || echo
+/opt/netdata/usr/bin/netdata -D

@@ -12,7 +12,7 @@ import (
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/modules/vsphere/discover"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/modules/vsphere/match"
 	rs "github.com/netdata/netdata/go/plugins/plugin/go.d/modules/vsphere/resources"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -77,7 +77,7 @@ func TestVSphere_Init_ReturnsFalseIfPasswordNotSet(t *testing.T) {
 func TestVSphere_Init_ReturnsFalseIfClientWrongTLSCA(t *testing.T) {
 	vSphere, _, teardown := prepareVSphereSim(t)
 	defer teardown()
-	vSphere.Client.TLSConfig.TLSCA = "testdata/tls"
+	vSphere.ClientConfig.TLSConfig.TLSCA = "testdata/tls"
 
 	assert.Error(t, vSphere.Init())
 }
@@ -330,9 +330,9 @@ func TestVSphere_Collect(t *testing.T) {
 		"vm-72_sys.uptime.latest":             200,
 	}
 
-	collected := vSphere.Collect()
+	mx := vSphere.Collect()
 
-	require.Equal(t, expected, collected)
+	require.Equal(t, expected, mx)
 
 	count := model.Count()
 	assert.Len(t, vSphere.discoveredHosts, count.Host)
@@ -340,7 +340,7 @@ func TestVSphere_Collect(t *testing.T) {
 	assert.Len(t, vSphere.charted, count.Host+count.Machine)
 
 	assert.Len(t, *vSphere.Charts(), count.Host*len(hostChartsTmpl)+count.Machine*len(vmChartsTmpl))
-	ensureCollectedHasAllChartsDimsVarsIDs(t, vSphere, collected)
+	module.TestMetricsHasAllChartsDims(t, vSphere.Charts(), mx)
 }
 
 func TestVSphere_Collect_RemoveHostsVMsInRuntime(t *testing.T) {
@@ -402,7 +402,7 @@ func TestVSphere_Collect_Run(t *testing.T) {
 	vSphere, model, teardown := prepareVSphereSim(t)
 	defer teardown()
 
-	vSphere.DiscoveryInterval = web.Duration(time.Second * 2)
+	vSphere.DiscoveryInterval = confopt.Duration(time.Second * 2)
 	require.NoError(t, vSphere.Init())
 	require.NoError(t, vSphere.Check())
 
@@ -419,19 +419,6 @@ func TestVSphere_Collect_Run(t *testing.T) {
 	assert.Len(t, vSphere.discoveredVMs, count.Machine)
 	assert.Len(t, vSphere.charted, count.Host+count.Machine)
 	assert.Len(t, *vSphere.charts, count.Host*len(hostChartsTmpl)+count.Machine*len(vmChartsTmpl))
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, vSphere *VSphere, collected map[string]int64) {
-	for _, chart := range *vSphere.Charts() {
-		for _, dim := range chart.Dims {
-			_, ok := collected[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := collected[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
-		}
-	}
 }
 
 func prepareVSphereSim(t *testing.T) (vSphere *VSphere, model *simulator.Model, teardown func()) {

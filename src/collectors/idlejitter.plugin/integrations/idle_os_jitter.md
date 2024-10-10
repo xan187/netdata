@@ -96,7 +96,7 @@ The file format is a modified INI syntax. The general structure is:
 [section2]
     option3 = some third value
 ```
-You can edit the configuration file using the `edit-config` script from the
+You can edit the configuration file using the [`edit-config`](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script from the
 Netdata [config directory](/docs/netdata-agent/configuration/README.md#the-netdata-config-directory).
 
 ```bash
@@ -110,7 +110,7 @@ This integration only supports a single configuration option, and most users wil
 
 | Name | Description | Default | Required |
 |:----|:-----------|:-------|:--------:|
-| loop time in ms | Specifies the target time for the data collection thread to sleep, measured in miliseconds. | 20 | no |
+| loop time | Specifies the target time for the data collection thread to sleep, measured in miliseconds. | 20ms | no |
 
 #### Examples
 There are no configuration examples.

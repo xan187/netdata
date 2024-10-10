@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/netdata/netdata/go/plugins/logger"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/netdataapi"
+	"github.com/netdata/netdata/go/plugins/pkg/netdataapi"
 )
 
 var obsoleteLock = &sync.Mutex{}
@@ -227,14 +227,14 @@ func (j *Job) AutoDetection() (err error) {
 	}
 
 	if err = j.init(); err != nil {
-		j.Error("init failed")
+		j.Errorf("init failed: %v", err)
 		j.Unmute()
 		j.disableAutoDetection()
 		return err
 	}
 
 	if err = j.check(); err != nil {
-		j.Error("check failed")
+		j.Errorf("check failed: %v", err)
 		j.Unmute()
 		return err
 	}
@@ -243,7 +243,7 @@ func (j *Job) AutoDetection() (err error) {
 	j.Info("check success")
 
 	if err = j.postCheck(); err != nil {
-		j.Error("postCheck failed")
+		j.Errorf("postCheck failed: %v", err)
 		j.disableAutoDetection()
 		return err
 	}
@@ -394,9 +394,18 @@ func (j *Job) collect() (result map[string]int64) {
 }
 
 func (j *Job) processMetrics(metrics map[string]int64, startTime time.Time, sinceLastRun int) bool {
-	if !j.vnodeCreated && j.vnodeGUID != "" {
-		_ = j.api.HOSTINFO(j.vnodeGUID, j.vnodeHostname, j.vnodeLabels)
-		j.vnodeCreated = true
+	if !j.vnodeCreated {
+		if j.vnodeGUID == "" {
+			if v := j.module.VirtualNode(); v != nil && v.GUID != "" && v.Hostname != "" {
+				j.vnodeGUID = v.GUID
+				j.vnodeHostname = v.Hostname
+				j.vnodeLabels = v.Labels
+			}
+		}
+		if j.vnodeGUID != "" {
+			_ = j.api.HOSTINFO(j.vnodeGUID, j.vnodeHostname, j.vnodeLabels)
+			j.vnodeCreated = true
+		}
 	}
 
 	_ = j.api.HOST(j.vnodeGUID)
@@ -484,15 +493,15 @@ func (j *Job) createChart(chart *Chart) {
 			if ls == 0 {
 				ls = LabelSourceAuto
 			}
-			_ = j.api.CLABEL(l.Key, l.Value, ls)
+			_ = j.api.CLABEL(l.Key, lblReplacer.Replace(l.Value), ls)
 		}
 	}
 	for k, v := range j.labels {
 		if !seen[k] {
-			_ = j.api.CLABEL(k, v, LabelSourceConf)
+			_ = j.api.CLABEL(k, lblReplacer.Replace(v), LabelSourceConf)
 		}
 	}
-	_ = j.api.CLABEL("_collect_job", j.Name(), LabelSourceAuto)
+	_ = j.api.CLABEL("_collect_job", lblReplacer.Replace(j.Name()), LabelSourceAuto)
 	_ = j.api.CLABELCOMMIT()
 
 	for _, dim := range chart.Dims {
@@ -638,3 +647,5 @@ func handleZero(v int) int {
 	}
 	return v
 }
+
+var lblReplacer = strings.NewReplacer("'", "")

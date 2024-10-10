@@ -47,15 +47,15 @@ func TestHaproxy_Init(t *testing.T) {
 		},
 		"fails on unset 'url'": {
 			wantFail: true,
-			config: Config{HTTP: web.HTTP{
-				Request: web.Request{},
+			config: Config{HTTPConfig: web.HTTPConfig{
+				RequestConfig: web.RequestConfig{},
 			}},
 		},
 		"fails on invalid TLSCA": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Client: web.Client{
+				HTTPConfig: web.HTTPConfig{
+					ClientConfig: web.ClientConfig{
 						TLSConfig: tlscfg.TLSConfig{TLSCA: "testdata/tls"},
 					},
 				}},
@@ -173,11 +173,11 @@ func TestHaproxy_Collect(t *testing.T) {
 			h, cleanup := test.prepare(t)
 			defer cleanup()
 
-			ms := h.Collect()
+			mx := h.Collect()
 
-			assert.Equal(t, test.wantCollected, ms)
+			assert.Equal(t, test.wantCollected, mx)
 			if len(test.wantCollected) > 0 {
-				ensureCollectedHasAllChartsDimsVarsIDs(t, h, ms)
+				module.TestMetricsHasAllChartsDims(t, h.Charts(), mx)
 			}
 		})
 	}
@@ -244,20 +244,4 @@ func prepareCaseConnectionRefused(t *testing.T) (*Haproxy, func()) {
 	require.NoError(t, h.Init())
 
 	return h, func() {}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, h *Haproxy, ms map[string]int64) {
-	for _, chart := range *h.Charts() {
-		if chart.Obsolete {
-			continue
-		}
-		for _, dim := range chart.Dims {
-			_, ok := ms[dim.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := ms[v.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", v.ID, chart.ID)
-		}
-	}
 }

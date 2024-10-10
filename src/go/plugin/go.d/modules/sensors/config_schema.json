@@ -11,18 +11,67 @@
         "minimum": 1,
         "default": 10
       },
-      "binary_path": {
-        "title": "Binary path",
-        "description": "Path to the `sensors` binary. If left empty or if the binary is not found, [**sysfs**](https://www.kernel.org/doc/Documentation/hwmon/sysfs-interface) will be used to collect sensor statistics.",
-        "type": "string",
-        "default": "/usr/bin/sensors"
-      },
-      "timeout": {
-        "title": "Timeout",
-        "description": "Timeout for executing the binary, specified in seconds.",
-        "type": "number",
-        "minimum": 0.5,
-        "default": 2
+      "relabel": {
+        "title": "Update Labels",
+        "description": " This configuration can be used to update existing sensor labels or add labels to sensors that don't have them.",
+        "type": [
+          "array",
+          "null"
+        ],
+        "items": {
+          "title": "",
+          "description": "",
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "chip": {
+              "title": "Chip",
+              "description": "[Pattern](https://github.com/netdata/netdata/tree/master/src/go/pkg/matcher#simple-patterns-matcher) to match the `chip_id` label.",
+              "type": "string"
+            },
+            "sensors": {
+              "title": "Relabel",
+              "description": "A list of sensors to be relabeled for the specified chip. The sensor name will be matched against the `sensor` label value.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "title": "Sensor",
+                "description": "",
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "name": {
+                    "title": "Name",
+                    "description": "",
+                    "type": "string"
+                  },
+                  "label": {
+                    "title": "New label",
+                    "description": "",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "label"
+                ]
+              },
+              "minItems": 1,
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "chip",
+            "sensors"
+          ]
+        },
+        "uniqueItems": true
       }
     },
     "required": [
@@ -36,11 +85,37 @@
     "uiOptions": {
       "fullPage": true
     },
-    "binary_path": {
-      "ui:help": "If an absolute path is provided, the collector will use it directly; otherwise, it will search for the binary in directories specified in the PATH environment variable."
+    "relabel": {
+      "items": {
+        "chip": {
+          "ui:placeholder": "it8688-*"
+        },
+        "sensors": {
+          "ui:listFlavour": "list",
+          "items": {
+            "name": {
+              "ui:placeholder": "For example, temp1, in1, or voltage1."
+            }
+          }
+        }
+      }
     },
-    "timeout": {
-      "ui:help": "Accepts decimals for precise control (e.g., type 1.5 for 1.5 seconds)."
+    "ui:flavour": "tabs",
+    "ui:options": {
+      "tabs": [
+        {
+          "title": "Base",
+          "fields": [
+            "update_every"
+          ]
+        },
+        {
+          "title": "Relabel Sensors",
+          "fields": [
+            "relabel"
+          ]
+        }
+      ]
     }
   }
 }

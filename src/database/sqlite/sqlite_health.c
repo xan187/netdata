@@ -311,7 +311,7 @@ void sql_health_alarm_log_cleanup(RRDHOST *host)
 
     int param = 0;
     SQLITE_BIND_FAIL(done, sqlite3_bind_blob(res, ++param, &host->host_id.uuid, sizeof(host->host_id.uuid), SQLITE_STATIC));
-    SQLITE_BIND_FAIL(done, sqlite3_bind_int64(res, ++param, (sqlite3_int64)host->health_log.health_log_history));
+    SQLITE_BIND_FAIL(done, sqlite3_bind_int64(res, ++param, (sqlite3_int64)host->health_log.health_log_retention_s));
 
     param = 0;
     rc = sqlite3_step_monitored(res);
@@ -430,10 +430,8 @@ static void sql_inject_removed_status(
         int64_t health_log_id = sqlite3_column_int64(res, 0);
         RRDCALC_STATUS old_status = (RRDCALC_STATUS)sqlite3_column_double(res, 1);
         insert_alert_queue(
-            host, health_log_id, (int64_t)unique_id, (int64_t)alarm_id, old_status, RRDCALC_STATUS_REMOVED);
+            host, health_log_id, (int64_t)max_unique_id, (int64_t)alarm_id, old_status, RRDCALC_STATUS_REMOVED);
     }
-    //else
-    //   error_report("HEALTH [N/A]: Failed to execute SQL_INJECT_REMOVED, rc = %d", rc);
 
 done:
     REPORT_BIND_FAIL(res, param);

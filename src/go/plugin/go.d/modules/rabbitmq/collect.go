@@ -3,10 +3,7 @@
 package rabbitmq
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"path/filepath"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/stm"
@@ -44,8 +41,13 @@ func (r *RabbitMQ) collect() (map[string]int64, error) {
 }
 
 func (r *RabbitMQ) collectOverviewStats(mx map[string]int64) error {
+	req, err := web.NewHTTPRequestWithPath(r.RequestConfig, urlPathAPIOverview)
+	if err != nil {
+		return fmt.Errorf("failed to create overview stats request: %w", err)
+	}
+
 	var stats overviewStats
-	if err := r.doOKDecode(urlPathAPIOverview, &stats); err != nil {
+	if err := web.DoHTTP(r.httpClient).RequestJSON(req, &stats); err != nil {
 		return err
 	}
 
@@ -65,22 +67,32 @@ func (r *RabbitMQ) collectNodeStats(mx map[string]int64) error {
 		return nil
 	}
 
+	req, err := web.NewHTTPRequestWithPath(r.RequestConfig, filepath.Join(urlPathAPINodes, r.nodeName))
+	if err != nil {
+		return fmt.Errorf("failed to create node stats request: %w", err)
+	}
+
 	var stats nodeStats
-	if err := r.doOKDecode(filepath.Join(urlPathAPINodes, r.nodeName), &stats); err != nil {
+	if err := web.DoHTTP(r.httpClient).RequestJSON(req, &stats); err != nil {
 		return err
 	}
 
 	for k, v := range stm.ToMap(stats) {
 		mx[k] = v
 	}
-	mx["proc_available"] = int64(stats.ProcTotal - stats.ProcUsed)
+	mx["proc_available"] = stats.ProcTotal - stats.ProcUsed
 
 	return nil
 }
 
 func (r *RabbitMQ) collectVhostsStats(mx map[string]int64) error {
+	req, err := web.NewHTTPRequestWithPath(r.RequestConfig, urlPathAPIVhosts)
+	if err != nil {
+		return fmt.Errorf("failed to create vhosts stats request: %w", err)
+	}
+
 	var stats []vhostStats
-	if err := r.doOKDecode(urlPathAPIVhosts, &stats); err != nil {
+	if err := web.DoHTTP(r.httpClient).RequestJSON(req, &stats); err != nil {
 		return err
 	}
 
@@ -112,8 +124,13 @@ func (r *RabbitMQ) collectVhostsStats(mx map[string]int64) error {
 }
 
 func (r *RabbitMQ) collectQueuesStats(mx map[string]int64) error {
+	req, err := web.NewHTTPRequestWithPath(r.RequestConfig, urlPathAPIQueues)
+	if err != nil {
+		return fmt.Errorf("failed to create queues stats request: %w", err)
+	}
+
 	var stats []queueStats
-	if err := r.doOKDecode(urlPathAPIQueues, &stats); err != nil {
+	if err := web.DoHTTP(r.httpClient).RequestJSON(req, &stats); err != nil {
 		return err
 	}
 
@@ -142,36 +159,4 @@ func (r *RabbitMQ) collectQueuesStats(mx map[string]int64) error {
 	}
 
 	return nil
-}
-
-func (r *RabbitMQ) doOKDecode(urlPath string, in interface{}) error {
-	req, err := web.NewHTTPRequestWithPath(r.Request, urlPath)
-	if err != nil {
-		return fmt.Errorf("error on creating request: %v", err)
-	}
-
-	r.Debugf("doing HTTP %s to '%s'", req.Method, req.URL)
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error on request to %s: %v", req.URL, err)
-	}
-
-	defer closeBody(resp)
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s returned HTTP status %d (%s)", req.URL, resp.StatusCode, resp.Status)
-	}
-
-	if err = json.NewDecoder(resp.Body).Decode(&in); err != nil {
-		return fmt.Errorf("error on decoding response from %s: %v", req.URL, err)
-	}
-
-	return nil
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
 }

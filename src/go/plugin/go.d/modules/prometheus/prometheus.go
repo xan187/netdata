@@ -7,8 +7,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/prometheus"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/prometheus/selector"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
@@ -31,9 +32,9 @@ func init() {
 func New() *Prometheus {
 	return &Prometheus{
 		Config: Config{
-			HTTP: web.HTTP{
-				Client: web.Client{
-					Timeout: web.Duration(time.Second * 10),
+			HTTPConfig: web.HTTPConfig{
+				ClientConfig: web.ClientConfig{
+					Timeout: confopt.Duration(time.Second * 10),
 				},
 			},
 			MaxTS:          2000,
@@ -46,9 +47,10 @@ func New() *Prometheus {
 
 type Config struct {
 	UpdateEvery     int `yaml:"update_every,omitempty" json:"update_every"`
-	web.HTTP        `yaml:",inline" json:""`
+	web.HTTPConfig  `yaml:",inline" json:""`
 	Name            string        `yaml:"name,omitempty" json:"name"`
 	Application     string        `yaml:"app,omitempty" json:"app"`
+	LabelPrefix     string        `yaml:"label_prefix,omitempty" json:"label_prefix"`
 	BearerTokenFile string        `yaml:"bearer_token_file,omitempty" json:"bearer_token_file"`
 	Selector        selector.Expr `yaml:"selector,omitempty" json:"selector"`
 	ExpectedPrefix  string        `yaml:"expected_prefix,omitempty" json:"expected_prefix"`

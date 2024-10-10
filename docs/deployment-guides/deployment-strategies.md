@@ -32,7 +32,7 @@ In this example, Machine Learning and Alerting are disabled for the Child, so th
 
 ##### netdata.conf
 
-On the child node, edit `netdata.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-netdataconf) script and set the following parameters:
+On the child node, edit `netdata.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script and set the following parameters:
 
 ```yaml
 [db]
@@ -63,7 +63,7 @@ On the child node, edit `netdata.conf` by using the [edit-config](/docs/netdata-
 
 ##### stream.conf
 
-To edit `stream.conf`, use again the [edit-config](/docs/netdata-agent/configuration/README.md#edit-netdataconf) script and set the following parameters:
+To edit `stream.conf`, use again the [edit-config](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script and set the following parameters:
 
 ```yaml
 [stream]
@@ -77,7 +77,7 @@ To edit `stream.conf`, use again the [edit-config](/docs/netdata-agent/configura
 
 #### Parent config
 
-For the Parent, besides setting up streaming, this example also provides configuration for multiple [tiers of metrics storage](/docs/netdata-agent/configuration/optimizing-metrics-database/change-metrics-storage.md#calculate-the-system-resources-ram-disk-space-needed-to-store-metrics), for 10 Children, with about 2k metrics each. This allows for:
+For the Parent, besides setting up streaming, this example also provides configuration for multiple [tiers of metrics storage](/docs/netdata-agent/configuration/optimizing-metrics-database/change-metrics-storage.md), for 10 Children, with about 2k metrics each. This allows for:
 
 - 1s granularity at tier 0 for 1 week
 - 1m granularity at tier 1 for 1 month
@@ -90,28 +90,23 @@ Requiring:
 
 ##### netdata.conf
 
-On the Parent, edit `netdata.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-netdataconf) script and set the following parameters:
+On the Parent, edit `netdata.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script and set the following parameters:
 
 ```yaml
 [db]
     mode = dbengine
+    dbengine tier backfill = new
     storage tiers = 3
-    # To allow memory pressure to offload index from ram
-    dbengine page descriptors in file mapped memory = yes
+    dbengine page cache size = 1.4GiB
     # storage tier 0
     update every = 1
-    dbengine multihost disk space MB = 12000
-    dbengine page cache size MB = 1400
+    dbengine tier 0 retention space = 12GiB
     # storage tier 1
-    dbengine tier 1 page cache size MB = 512
-    dbengine tier 1 multihost disk space MB = 4096
     dbengine tier 1 update every iterations = 60
-    dbengine tier 1 backfill = new
+    dbengine tier 1 retention space = 4GiB
     # storage tier 2
-    dbengine tier 2 page cache size MB = 128
-    dbengine tier 2 multihost disk space MB = 2048
     dbengine tier 2 update every iterations = 60
-    dbengine tier 2 backfill = new
+    dbengine tier 2 retention space = 2GiB
 [ml]
     # Enabled by default
     # enabled = yes
@@ -125,7 +120,7 @@ On the Parent, edit `netdata.conf` by using the [edit-config](/docs/netdata-agen
 
 ##### stream.conf
 
-On the Parent node, edit `stream.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-netdataconf) script and set the following parameters:
+On the Parent node, edit `stream.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script and set the following parameters:
 
 ```yaml
 [API_KEY]
@@ -137,7 +132,7 @@ On the Parent node, edit `stream.conf` by using the [edit-config](/docs/netdata-
 
 In order to setup active–active streaming between Parent 1 and Parent 2, Parent 1 needs to be instructed to stream data to Parent 2 and Parent 2 to stream data to Parent 1. The Child Agents need to be configured with the addresses of both Parent Agents. An Agent will only connect to one Parent at a time, falling back to the next upon failure. These examples use the same API key between Parent Agents and for connections for Child Agents.
 
-On both Netdata Parent and all Child Agents, edit `stream.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-netdataconf) script:
+On both Netdata Parent and all Child Agents, edit `stream.conf` by using the [edit-config](/docs/netdata-agent/configuration/README.md#edit-a-configuration-file-using-edit-config) script:
 
 #### stream.conf on Parent 1
 

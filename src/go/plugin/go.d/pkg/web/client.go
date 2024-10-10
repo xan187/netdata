@@ -3,78 +3,84 @@
 package web
 
 import (
-	"errors"
+	"encoding/json"
+	"encoding/xml"
 	"fmt"
-	"net"
+	"io"
 	"net/http"
-	"net/url"
-
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/tlscfg"
 )
 
-// ErrRedirectAttempted indicates that a redirect occurred.
-var ErrRedirectAttempted = errors.New("redirect")
-
-// Client is the configuration of the HTTP client.
-// This structure is not intended to be used directly as part of a module's configuration.
-// Supported configuration file formats: YAML.
 type Client struct {
-	// Timeout specifies a time limit for requests made by this Client.
-	// Default (zero value) is no timeout. Must be set before http.Client creation.
-	Timeout Duration `yaml:"timeout,omitempty" json:"timeout"`
-
-	// NotFollowRedirect specifies the policy for handling redirects.
-	// Default (zero value) is std http package default policy (stop after 10 consecutive requests).
-	NotFollowRedirect bool `yaml:"not_follow_redirects,omitempty" json:"not_follow_redirects"`
-
-	// ProxyURL specifies the URL of the proxy to use. An empty string means use the environment variables
-	// HTTP_PROXY, HTTPS_PROXY and NO_PROXY (or the lowercase versions thereof) to get the URL.
-	ProxyURL string `yaml:"proxy_url,omitempty" json:"proxy_url"`
-
-	// TLSConfig specifies the TLS configuration.
-	tlscfg.TLSConfig `yaml:",inline" json:""`
+	httpClient *http.Client
+	onNokCode  func(resp *http.Response) (bool, error)
 }
 
-// NewHTTPClient returns a new *http.Client given a Client configuration and an error if any.
-func NewHTTPClient(cfg Client) (*http.Client, error) {
-	tlsConfig, err := tlscfg.NewTLSConfig(cfg.TLSConfig)
+func DoHTTP(cl *http.Client) *Client {
+	return &Client{
+		httpClient: cl,
+	}
+}
+
+func (c *Client) OnNokCode(fn func(resp *http.Response) (bool, error)) *Client {
+	c.onNokCode = fn
+	return c
+}
+
+func (c *Client) RequestJSON(req *http.Request, in any) error {
+	return c.Request(req, func(body io.Reader) error {
+		return json.NewDecoder(body).Decode(in)
+	})
+}
+
+func (c *Client) RequestXML(req *http.Request, in any, opts ...func(dec *xml.Decoder)) error {
+	return c.Request(req, func(body io.Reader) error {
+		dec := xml.NewDecoder(body)
+		for _, opt := range opts {
+			opt(dec)
+		}
+		return dec.Decode(in)
+	})
+}
+
+func (c *Client) Request(req *http.Request, parse func(body io.Reader) error) error {
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error on creating TLS config: %v", err)
+		return fmt.Errorf("error on HTTP request to '%s': %w", req.URL, err)
 	}
 
-	if cfg.ProxyURL != "" {
-		if _, err := url.Parse(cfg.ProxyURL); err != nil {
-			return nil, fmt.Errorf("error on parsing proxy URL '%s': %v", cfg.ProxyURL, err)
+	defer CloseBody(resp)
+
+	if resp.StatusCode != http.StatusOK {
+		if err := c.handleNokCode(req, resp); err != nil {
+			return err
 		}
 	}
 
-	d := &net.Dialer{Timeout: cfg.Timeout.Duration()}
-
-	transport := &http.Transport{
-		Proxy:               proxyFunc(cfg.ProxyURL),
-		TLSClientConfig:     tlsConfig,
-		DialContext:         d.DialContext,
-		TLSHandshakeTimeout: cfg.Timeout.Duration(),
+	if parse != nil {
+		if err := parse(resp.Body); err != nil {
+			return fmt.Errorf("error on parsing response from '%s': %w", req.URL, err)
+		}
 	}
 
-	return &http.Client{
-		Timeout:       cfg.Timeout.Duration(),
-		Transport:     transport,
-		CheckRedirect: redirectFunc(cfg.NotFollowRedirect),
-	}, nil
+	return nil
 }
 
-func redirectFunc(notFollowRedirect bool) func(req *http.Request, via []*http.Request) error {
-	if follow := !notFollowRedirect; follow {
-		return nil
+func (c *Client) handleNokCode(req *http.Request, resp *http.Response) error {
+	if c.onNokCode != nil {
+		handled, err := c.onNokCode(resp)
+		if err != nil {
+			return fmt.Errorf("'%s' returned HTTP status code: %d (%w)", req.URL, resp.StatusCode, err)
+		}
+		if handled {
+			return nil
+		}
 	}
-	return func(_ *http.Request, _ []*http.Request) error { return ErrRedirectAttempted }
+	return fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
 }
 
-func proxyFunc(rawProxyURL string) func(r *http.Request) (*url.URL, error) {
-	if rawProxyURL == "" {
-		return http.ProxyFromEnvironment
+func CloseBody(resp *http.Response) {
+	if resp != nil && resp.Body != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
 	}
-	proxyURL, _ := url.Parse(rawProxyURL)
-	return http.ProxyURL(proxyURL)
 }

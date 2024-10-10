@@ -5,9 +5,12 @@ package hdfs
 import (
 	_ "embed"
 	"errors"
+	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 )
 
@@ -24,12 +27,12 @@ func init() {
 
 func New() *HDFS {
 	config := Config{
-		HTTP: web.HTTP{
-			Request: web.Request{
+		HTTPConfig: web.HTTPConfig{
+			RequestConfig: web.RequestConfig{
 				URL: "http://127.0.0.1:9870/jmx",
 			},
-			Client: web.Client{
-				Timeout: web.Duration(time.Second),
+			ClientConfig: web.ClientConfig{
+				Timeout: confopt.Duration(time.Second),
 			},
 		},
 	}
@@ -40,8 +43,8 @@ func New() *HDFS {
 }
 
 type Config struct {
-	web.HTTP    `yaml:",inline" json:""`
-	UpdateEvery int `yaml:"update_every" json:"update_every"`
+	web.HTTPConfig `yaml:",inline" json:""`
+	UpdateEvery    int `yaml:"update_every" json:"update_every"`
 }
 
 type (
@@ -49,7 +52,7 @@ type (
 		module.Base
 		Config `yaml:",inline" json:""`
 
-		client *client
+		httpClient *http.Client
 
 		nodeType
 	}
@@ -66,17 +69,15 @@ func (h *HDFS) Configuration() any {
 }
 
 func (h *HDFS) Init() error {
-	if err := h.validateConfig(); err != nil {
-		h.Errorf("config validation: %v", err)
-		return err
+	if h.URL == "" {
+		return errors.New("URL is required but not set")
 	}
 
-	cl, err := h.createClient()
+	httpClient, err := web.NewHTTPClient(h.ClientConfig)
 	if err != nil {
-		h.Errorf("error on creating client : %v", err)
-		return err
+		return fmt.Errorf("failed to create HTTP client: %v", err)
 	}
-	h.client = cl
+	h.httpClient = httpClient
 
 	return nil
 }
@@ -84,19 +85,19 @@ func (h *HDFS) Init() error {
 func (h *HDFS) Check() error {
 	typ, err := h.determineNodeType()
 	if err != nil {
-		h.Errorf("error on node type determination : %v", err)
-		return err
+		return fmt.Errorf("error on node type determination : %v", err)
 	}
 	h.nodeType = typ
 
 	mx, err := h.collect()
 	if err != nil {
-		h.Error(err)
 		return err
 	}
+
 	if len(mx) == 0 {
 		return errors.New("no metrics collected")
 	}
+
 	return nil
 }
 
@@ -113,12 +114,8 @@ func (h *HDFS) Charts() *Charts {
 
 func (h *HDFS) Collect() map[string]int64 {
 	mx, err := h.collect()
-
 	if err != nil {
 		h.Error(err)
-	}
-
-	if len(mx) == 0 {
 		return nil
 	}
 
@@ -126,7 +123,7 @@ func (h *HDFS) Collect() map[string]int64 {
 }
 
 func (h *HDFS) Cleanup() {
-	if h.client != nil && h.client.httpClient != nil {
-		h.client.httpClient.CloseIdleConnections()
+	if h.httpClient != nil {
+		h.httpClient.CloseIdleConnections()
 	}
 }

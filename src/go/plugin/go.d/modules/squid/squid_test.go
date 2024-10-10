@@ -47,8 +47,8 @@ func TestSquid_Init(t *testing.T) {
 		"fail when URL not set": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: ""},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: ""},
 				},
 			},
 		},
@@ -187,7 +187,7 @@ Fusce et felis pulvinar, posuere sem non, porttitor eros.`)
 
 	srv := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(resp))
+			_, _ = w.Write(resp)
 		}))
 
 	squid := New()
@@ -203,7 +203,7 @@ func prepareCaseEmptyResponse(t *testing.T) (*Squid, func()) {
 
 	srv := httptest.NewServer(http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
-			_, _ = w.Write([]byte(resp))
+			_, _ = w.Write(resp)
 		}))
 
 	squid := New()

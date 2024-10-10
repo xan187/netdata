@@ -18,14 +18,14 @@ FROM
 `
 
 func (c *ClickHouse) collectSystemEvents(mx map[string]int64) error {
-	req, _ := web.NewHTTPRequest(c.Request)
+	req, _ := web.NewHTTPRequest(c.RequestConfig)
 	req.URL.RawQuery = makeURLQuery(querySystemEvents)
 
 	px := "events_"
 	var event string
 	var n int
 
-	err := c.doOKDecodeCSV(req, func(column, value string, lineEnd bool) {
+	err := c.doHTTP(req, func(column, value string, lineEnd bool) {
 		switch column {
 		case "event":
 			event = value

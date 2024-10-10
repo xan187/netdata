@@ -7,14 +7,16 @@ import (
 	"strconv"
 	"text/template"
 
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/matcher"
+	"github.com/netdata/netdata/go/plugins/pkg/matcher"
 
 	"github.com/Masterminds/sprig/v3"
 	"github.com/bmatcuk/doublestar/v4"
 )
 
 func newFuncMap() template.FuncMap {
-	custom := map[string]interface{}{
+	fm := sprig.TxtFuncMap()
+
+	extra := map[string]any{
 		"match": funcMatchAny,
 		"glob": func(value, pattern string, patterns ...string) bool {
 			return funcMatchAny("glob", value, pattern, patterns...)
@@ -25,9 +27,7 @@ func newFuncMap() template.FuncMap {
 		},
 	}
 
-	fm := sprig.HermeticTxtFuncMap()
-
-	for name, fn := range custom {
+	for name, fn := range extra {
 		fm[name] = fn
 	}
 

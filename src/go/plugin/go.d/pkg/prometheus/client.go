@@ -28,7 +28,7 @@ type (
 
 	prometheus struct {
 		client   *http.Client
-		request  web.Request
+		request  web.RequestConfig
 		filepath string
 
 		sr selector.Selector
@@ -46,7 +46,7 @@ const (
 )
 
 // New creates a Prometheus instance.
-func New(client *http.Client, request web.Request) Prometheus {
+func New(client *http.Client, request web.RequestConfig) Prometheus {
 	return &prometheus{
 		client:  client,
 		request: request,
@@ -55,7 +55,7 @@ func New(client *http.Client, request web.Request) Prometheus {
 }
 
 // NewWithSelector creates a Prometheus instance with the selector.
-func NewWithSelector(client *http.Client, request web.Request, sr selector.Selector) Prometheus {
+func NewWithSelector(client *http.Client, request web.RequestConfig, sr selector.Selector) Prometheus {
 	p := &prometheus{
 		client:  client,
 		request: request,
@@ -103,7 +103,7 @@ func (p *prometheus) fetch(w io.Writer) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		_, err = io.Copy(w, f)
 
@@ -123,10 +123,7 @@ func (p *prometheus) fetch(w io.Writer) error {
 		return err
 	}
 
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}()
+	defer web.CloseBody(resp)
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("server '%s' returned HTTP status code %d (%s)", req.URL, resp.StatusCode, resp.Status)

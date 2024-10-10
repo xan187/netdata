@@ -107,7 +107,7 @@ struct ml_metrics_statistics {
 #include "streaming/stream_capabilities.h"
 #include "streaming/stream_path.h"
 #include "streaming/rrdpush.h"
-#include "aclk/aclk_rrdhost_state.h"
+//#include "aclk/aclk_rrdhost_state.h"
 #include "sqlite/sqlite_health.h"
 
 typedef struct storage_query_handle STORAGE_QUERY_HANDLE;
@@ -270,7 +270,7 @@ void rrdr_fill_tier_gap_from_smaller_tiers(RRDDIM *rd, size_t tier, time_t now_s
 // RRD DIMENSION - this is a metric
 
 struct rrddim {
-    nd_uuid_t metric_uuid;                             // global UUID for this metric (unique_across hosts)
+    nd_uuid_t metric_uuid;                          // global UUID for this metric (unique_across hosts)
 
     // ------------------------------------------------------------------------
     // dimension definition
@@ -289,10 +289,10 @@ struct rrddim {
     // operational state members
 
     struct rrdset *rrdset;
-    rrd_ml_dimension_t *ml_dimension;                   // machine learning data about this dimension
+    rrd_ml_dimension_t *ml_dimension;               // machine learning data about this dimension
 
     struct {
-        RRDMETRIC_ACQUIRED *rrdmetric;                  // the rrdmetric of this dimension
+        RRDMETRIC_ACQUIRED *rrdmetric;              // the rrdmetric of this dimension
         bool collected;
     } rrdcontexts;
 
@@ -1096,7 +1096,7 @@ typedef struct alarm_log {
     uint32_t next_alarm_id;
     unsigned int count;
     unsigned int max;
-    uint32_t health_log_history;                   // the health log history in seconds to be kept in db
+    uint32_t health_log_retention_s;                   // the health log retention in seconds to be kept in db
     ALARM_ENTRY *alarms;
     RW_SPINLOCK spinlock;
 } ALARM_LOG;
@@ -1125,6 +1125,7 @@ struct rrdhost_system_info {
     char *host_os_detection;
     char *host_cores;
     char *host_cpu_freq;
+    char *host_cpu_model;
     char *host_ram_total;
     char *host_disk_space;
     char *container_os_name;
@@ -1384,7 +1385,7 @@ void rrddim_index_destroy(RRDSET *st);
 extern time_t rrdhost_free_orphan_time_s;
 extern time_t rrdhost_free_ephemeral_time_s;
 
-int rrd_init(char *hostname, struct rrdhost_system_info *system_info, bool unittest);
+int rrd_init(const char *hostname, struct rrdhost_system_info *system_info, bool unittest);
 
 RRDHOST *rrdhost_find_by_hostname(const char *hostname);
 RRDHOST *rrdhost_find_by_guid(const char *guid);
@@ -1405,9 +1406,9 @@ RRDHOST *rrdhost_find_or_create(
     RRD_MEMORY_MODE mode,
     unsigned int health_enabled,
     unsigned int rrdpush_enabled,
-    char *rrdpush_destination,
-    char *rrdpush_api_key,
-    char *rrdpush_send_charts_matching,
+    const char *rrdpush_destination,
+    const char *rrdpush_api_key,
+    const char *rrdpush_send_charts_matching,
     bool rrdpush_enable_replication,
     time_t rrdpush_seconds_to_replicate,
     time_t rrdpush_replication_step,
@@ -1568,7 +1569,6 @@ void rrddim_store_metric(RRDDIM *rd, usec_t point_end_time_ut, NETDATA_DOUBLE n,
 // ----------------------------------------------------------------------------
 // Miscellaneous functions
 
-char *rrdset_strncpyz_name(char *to, const char *from, size_t length);
 void reload_host_labels(void);
 void rrdhost_set_is_parent_label(void);
 

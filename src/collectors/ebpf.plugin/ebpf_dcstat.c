@@ -12,11 +12,7 @@ netdata_dcstat_pid_t *dcstat_vector = NULL;
 static netdata_idx_t dcstat_hash_values[NETDATA_DCSTAT_IDX_END];
 static netdata_idx_t *dcstat_values = NULL;
 
-struct config dcstat_config = { .first_section = NULL,
-    .last_section = NULL,
-    .mutex = NETDATA_MUTEX_INITIALIZER,
-    .index = { .avl_tree = { .root = NULL, .compar = appconfig_section_compare },
-        .rwlock = AVL_LOCK_INITIALIZER } };
+struct config dcstat_config = APPCONFIG_INITIALIZER;
 
 ebpf_local_maps_t dcstat_maps[] = {{.name = "dcstat_global", .internal_input = NETDATA_DIRECTORY_CACHE_END,
                                     .user_input = 0, .type = NETDATA_EBPF_MAP_STATIC,
@@ -542,9 +538,8 @@ static void ebpf_dcstat_apps_accumulator(netdata_dcstat_pid_t *out, int maps_per
  * Read the apps table and store data inside the structure.
  *
  * @param maps_per_core do I need to read all cores?
- * @param max_period    limit of iterations without updates before remove data from hash table
  */
-static void ebpf_read_dc_apps_table(int maps_per_core, uint32_t max_period)
+static void ebpf_read_dc_apps_table(int maps_per_core)
 {
     netdata_dcstat_pid_t *cv = dcstat_vector;
     int fd = dcstat_maps[NETDATA_DCSTAT_PID_STATS].map_fd;
@@ -660,7 +655,6 @@ void *ebpf_read_dcstat_thread(void *ptr)
     uint32_t lifetime = em->lifetime;
     uint32_t running_time = 0;
     usec_t period = update_every * USEC_PER_SEC;
-    uint32_t max_period = EBPF_CLEANUP_FACTOR;
     pids_fd[EBPF_PIDS_DCSTAT_IDX] = dcstat_maps[NETDATA_DCSTAT_PID_STATS].map_fd;
     while (!ebpf_plugin_stop() && running_time < lifetime) {
         (void)heartbeat_next(&hb, period);
@@ -668,7 +662,7 @@ void *ebpf_read_dcstat_thread(void *ptr)
             continue;
 
         pthread_mutex_lock(&collect_data_mutex);
-        ebpf_read_dc_apps_table(maps_per_core, max_period);
+        ebpf_read_dc_apps_table(maps_per_core);
         ebpf_dc_resume_apps_data();
         pthread_mutex_unlock(&collect_data_mutex);
 

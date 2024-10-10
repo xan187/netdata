@@ -580,7 +580,14 @@ void nd_log_set_user_settings(ND_LOG_SOURCES source, const char *setting) {
                         *slash = '\0';
                         slash++;
                         ls->limits.logs_per_period = ls->limits.logs_per_period_backup = str2u(value);
-                        ls->limits.throttle_period = str2u(slash);
+
+                        int period;
+                        if(!duration_parse_seconds(slash, &period)) {
+                            nd_log(NDLS_DAEMON, NDLP_ERR, "Error while parsing period '%s'", slash);
+                            period = ND_LOG_DEFAULT_THROTTLE_PERIOD;
+                        }
+
+                        ls->limits.throttle_period = period;
                     }
                     else {
                         ls->limits.logs_per_period = ls->limits.logs_per_period_backup = str2u(value);
@@ -589,8 +596,9 @@ void nd_log_set_user_settings(ND_LOG_SOURCES source, const char *setting) {
                 }
             }
             else
-                nd_log(NDLS_DAEMON, NDLP_ERR, "Error while parsing configuration of log source '%s'. "
-                                              "In config '%s', '%s' is not understood.",
+                nd_log(NDLS_DAEMON, NDLP_ERR,
+                       "Error while parsing configuration of log source '%s'. "
+                       "In config '%s', '%s' is not understood.",
                        nd_log_id2source(source), setting, name);
         }
     }
@@ -1619,30 +1627,36 @@ static void errno_annotator(BUFFER *wb, const char *key, struct log_field *lf) {
 static void winerror_annotator(BUFFER *wb, const char *key, struct log_field *lf) {
     DWORD errnum = log_field_to_uint64(lf);
 
-    if(errnum == 0)
+    if (errnum == 0)
         return;
 
     char buf[1024];
-    DWORD size = FormatMessageA(
+    wchar_t wbuf[1024];
+    DWORD size = FormatMessageW(
             FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
             NULL,
             errnum,
             MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            buf,
-            (DWORD)(sizeof(buf) - 1),
+            wbuf,
+            (DWORD)(sizeof(wbuf) / sizeof(wchar_t) - 1),
             NULL
     );
-    if(size > 0) {
-        // remove \r\n at the end
-        while(size > 0 && (buf[size - 1] == '\r' || buf[size - 1] == '\n'))
-            buf[--size] = '\0';
+
+    if (size > 0) {
+        // Remove \r\n at the end
+        while (size > 0 && (wbuf[size - 1] == L'\r' || wbuf[size - 1] == L'\n'))
+            wbuf[--size] = L'\0';
+
+        // Convert wide string to UTF-8
+        int utf8_size = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, buf, sizeof(buf), NULL, NULL);
+        if (utf8_size == 0)
+            snprintf(buf, sizeof(buf) - 1, "unknown error code");
+        buf[sizeof(buf) - 1] = '\0';
     }
     else
-        size = snprintf(buf, sizeof(buf) - 1, "unknown error code");
+        snprintf(buf, sizeof(buf) - 1, "unknown error code");
 
-    buf[size] = '\0';
-
-    if(buffer_strlen(wb))
+    if (buffer_strlen(wb))
         buffer_fast_strcat(wb, " ", 1);
 
     buffer_strcat(wb, key);

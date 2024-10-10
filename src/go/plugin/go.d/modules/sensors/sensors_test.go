@@ -17,18 +17,12 @@ import (
 var (
 	dataConfigJSON, _ = os.ReadFile("testdata/config.json")
 	dataConfigYAML, _ = os.ReadFile("testdata/config.yaml")
-
-	dataSensorsTemp, _               = os.ReadFile("testdata/sensors-temp.txt")
-	dataSensorsTempInCurrPowerFan, _ = os.ReadFile("testdata/sensors-temp-in-curr-power-fan.txt")
 )
 
 func Test_testDataIsValid(t *testing.T) {
 	for name, data := range map[string][]byte{
 		"dataConfigJSON": dataConfigJSON,
 		"dataConfigYAML": dataConfigYAML,
-
-		"dataSensorsTemp":               dataSensorsTemp,
-		"dataSensorsTempInCurrPowerFan": dataSensorsTempInCurrPowerFan,
 	} {
 		require.NotNil(t, data, name)
 
@@ -44,17 +38,9 @@ func TestSensors_Init(t *testing.T) {
 		config   Config
 		wantFail bool
 	}{
-		"success if 'binary_path' is not set": {
+		"success with default config": {
 			wantFail: false,
-			config: Config{
-				BinaryPath: "",
-			},
-		},
-		"success if failed to find binary": {
-			wantFail: false,
-			config: Config{
-				BinaryPath: "sensors!!!",
-			},
+			config:   New().Config,
 		},
 	}
 
@@ -84,7 +70,7 @@ func TestSensors_Cleanup(t *testing.T) {
 		"after check": {
 			prepare: func() *Sensors {
 				sensors := New()
-				sensors.exec = prepareMockExecOkOnlyTemp()
+				sensors.sc = prepareMockScannerOk()
 				_ = sensors.Check()
 				return sensors
 			},
@@ -92,7 +78,7 @@ func TestSensors_Cleanup(t *testing.T) {
 		"after collect": {
 			prepare: func() *Sensors {
 				sensors := New()
-				sensors.exec = prepareMockExecOkTempInCurrPowerFan()
+				sensors.sc = prepareMockScannerOk()
 				_ = sensors.Collect()
 				return sensors
 			},
@@ -114,36 +100,23 @@ func TestSensors_Charts(t *testing.T) {
 
 func TestSensors_Check(t *testing.T) {
 	tests := map[string]struct {
-		prepareMock func() *mockSensorsBinary
+		prepareMock func() *mockScanner
 		wantFail    bool
 	}{
-		"exec: only temperature": {
+		"multiple sensors": {
 			wantFail:    false,
-			prepareMock: prepareMockExecOkOnlyTemp,
+			prepareMock: prepareMockScannerOk,
 		},
-		"exec: temperature and voltage": {
-			wantFail:    false,
-			prepareMock: prepareMockExecOkTempInCurrPowerFan,
-		},
-		"exec: error on sensors info call": {
+		"error on scan": {
 			wantFail:    true,
-			prepareMock: prepareMockExecErr,
-		},
-		"exec: empty response": {
-			wantFail:    true,
-			prepareMock: prepareMockExecEmptyResponse,
-		},
-		"exec: unexpected response": {
-			wantFail:    true,
-			prepareMock: prepareMockExecUnexpectedResponse,
+			prepareMock: prepareMockScannerErr,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			sensors := New()
-			mock := test.prepareMock()
-			sensors.exec = mock
+			sensors.sc = test.prepareMock()
 
 			if test.wantFail {
 				assert.Error(t, sensors.Check())
@@ -156,124 +129,144 @@ func TestSensors_Check(t *testing.T) {
 
 func TestSensors_Collect(t *testing.T) {
 	tests := map[string]struct {
-		prepareExecMock  func() *mockSensorsBinary
-		prepareSysfsMock func() *mockSysfsScanner
-		wantMetrics      map[string]int64
-		wantCharts       int
+		prepareScanner func() *mockScanner
+		wantMetrics    map[string]int64
+		wantCharts     int
 	}{
-		"exec: only temperature": {
-			prepareExecMock: prepareMockExecOkOnlyTemp,
-			wantCharts:      24,
+		"multiple sensors": {
+			prepareScanner: prepareMockScannerOk,
+			wantCharts:     24,
 			wantMetrics: map[string]int64{
-				"sensor_chip_bnxt_en-pci-6200_feature_temp1_subfeature_temp1_input":  80000,
-				"sensor_chip_bnxt_en-pci-6201_feature_temp1_subfeature_temp1_input":  81000,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd1_subfeature_temp3_input":  58250,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd2_subfeature_temp4_input":  60250,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd3_subfeature_temp5_input":  57000,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd4_subfeature_temp6_input":  57250,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd5_subfeature_temp7_input":  57750,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd6_subfeature_temp8_input":  59500,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd7_subfeature_temp9_input":  58500,
-				"sensor_chip_k10temp-pci-00c3_feature_tccd8_subfeature_temp10_input": 61250,
-				"sensor_chip_k10temp-pci-00c3_feature_tctl_subfeature_temp1_input":   62000,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd1_subfeature_temp3_input":  54000,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd2_subfeature_temp4_input":  55500,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd3_subfeature_temp5_input":  56000,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd4_subfeature_temp6_input":  52750,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd5_subfeature_temp7_input":  53500,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd6_subfeature_temp8_input":  55250,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd7_subfeature_temp9_input":  53000,
-				"sensor_chip_k10temp-pci-00cb_feature_tccd8_subfeature_temp10_input": 53750,
-				"sensor_chip_k10temp-pci-00cb_feature_tctl_subfeature_temp1_input":   57500,
-				"sensor_chip_nouveau-pci-4100_feature_temp1_subfeature_temp1_input":  51000,
-				"sensor_chip_nvme-pci-0100_feature_composite_subfeature_temp1_input": 39850,
-				"sensor_chip_nvme-pci-6100_feature_composite_subfeature_temp1_input": 48850,
-				"sensor_chip_nvme-pci-8100_feature_composite_subfeature_temp1_input": 39850,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_alarm_clear":          1,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_alarm_triggered":      0,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_average":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_crit":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_highest":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_input":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_lcrit":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_lowest":               42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_max":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_min":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr1_read_time":            0,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_crit":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_highest":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_input":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_lcrit":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_lowest":               42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_max":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_min":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_curr2_read_time":            0,
+				"chip_chip0-pci-xxxxxxxx_sensor_energy1_input":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_energy1_read_time":          0,
+				"chip_chip0-pci-xxxxxxxx_sensor_energy2_input":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_energy2_read_time":          0,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_alarm_clear":           1,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_alarm_triggered":       0,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_input":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_max":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_min":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_read_time":             0,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan1_target":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan2_input":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan2_max":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan2_min":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan2_read_time":             0,
+				"chip_chip0-pci-xxxxxxxx_sensor_fan2_target":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_humidity1_input":            42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_humidity1_read_time":        0,
+				"chip_chip0-pci-xxxxxxxx_sensor_humidity2_input":            42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_humidity2_read_time":        0,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_alarm_clear":            1,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_alarm_triggered":        0,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_average":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_crit":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_highest":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_input":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_lcrit":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_lowest":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_max":                    42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_min":                    42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in1_read_time":              0,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_crit":                   42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_highest":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_input":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_lcrit":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_lowest":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_max":                    42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_min":                    42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_in2_read_time":              0,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion1_alarm_clear":     1,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion1_alarm_triggered": 0,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion1_read_time":       0,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion2_alarm_clear":     0,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion2_alarm_triggered": 1,
+				"chip_chip0-pci-xxxxxxxx_sensor_intrusion2_read_time":       0,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_accuracy":            34500,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_alarm_clear":         1,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_alarm_triggered":     0,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_average":             345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_average_highest":     345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_average_lowest":      345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_average_max":         345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_average_min":         345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_cap":                 345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_cap_max":             345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_cap_min":             345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_crit":                345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_input":               345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_input_highest":       345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_input_lowest":        345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_max":                 345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power1_read_time":           0,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_accuracy":            34500,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_average_highest":     345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_average_lowest":      345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_average_max":         345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_average_min":         345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_cap":                 345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_cap_max":             345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_cap_min":             345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_crit":                345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_input":               345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_input_highest":       345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_input_lowest":        345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_max":                 345000,
+				"chip_chip0-pci-xxxxxxxx_sensor_power2_read_time":           0,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_alarm_clear":          1,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_alarm_triggered":      0,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_crit":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_emergency":            42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_highest":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_input":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_lcrit":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_lowest":               42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_max":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_min":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp1_read_time":            0,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_crit":                 42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_emergency":            42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_highest":              42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_input":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_lcrit":                42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_lowest":               42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_max":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_min":                  42000,
+				"chip_chip0-pci-xxxxxxxx_sensor_temp2_read_time":            0,
 			},
 		},
-		"exec: multiple sensors": {
-			prepareExecMock: prepareMockExecOkTempInCurrPowerFan,
-			wantCharts:      20,
-			wantMetrics: map[string]int64{
-				"sensor_chip_acpitz-acpi-0_feature_temp1_subfeature_temp1_input":                        88000,
-				"sensor_chip_amdgpu-pci-0300_feature_edge_subfeature_temp1_input":                       53000,
-				"sensor_chip_amdgpu-pci-0300_feature_fan1_subfeature_fan1_input":                        0,
-				"sensor_chip_amdgpu-pci-0300_feature_junction_subfeature_temp2_input":                   58000,
-				"sensor_chip_amdgpu-pci-0300_feature_mem_subfeature_temp3_input":                        57000,
-				"sensor_chip_amdgpu-pci-0300_feature_ppt_subfeature_power1_average":                     29000,
-				"sensor_chip_amdgpu-pci-0300_feature_vddgfx_subfeature_in0_input":                       787,
-				"sensor_chip_amdgpu-pci-6700_feature_edge_subfeature_temp1_input":                       60000,
-				"sensor_chip_amdgpu-pci-6700_feature_ppt_subfeature_power1_average":                     5088,
-				"sensor_chip_amdgpu-pci-6700_feature_vddgfx_subfeature_in0_input":                       1335,
-				"sensor_chip_amdgpu-pci-6700_feature_vddnb_subfeature_in1_input":                        973,
-				"sensor_chip_asus-isa-0000_feature_cpu_fan_subfeature_fan1_input":                       5700000,
-				"sensor_chip_asus-isa-0000_feature_gpu_fan_subfeature_fan2_input":                       6600000,
-				"sensor_chip_bat0-acpi-0_feature_in0_subfeature_in0_input":                              17365,
-				"sensor_chip_k10temp-pci-00c3_feature_tctl_subfeature_temp1_input":                      90000,
-				"sensor_chip_nvme-pci-0600_feature_composite_subfeature_temp1_input":                    33850,
-				"sensor_chip_nvme-pci-0600_feature_sensor_1_subfeature_temp2_input":                     48850,
-				"sensor_chip_nvme-pci-0600_feature_sensor_2_subfeature_temp3_input":                     33850,
-				"sensor_chip_ucsi_source_psy_usbc000:001-isa-0000_feature_curr1_subfeature_curr1_input": 0,
-				"sensor_chip_ucsi_source_psy_usbc000:001-isa-0000_feature_in0_subfeature_in0_input":     0,
-			},
-		},
-		"exec: error on sensors info call": {
-			prepareExecMock: prepareMockExecErr,
-			wantMetrics:     nil,
-		},
-		"exec: empty response": {
-			prepareExecMock: prepareMockExecEmptyResponse,
-			wantMetrics:     nil,
-		},
-		"exec: unexpected response": {
-			prepareExecMock: prepareMockExecUnexpectedResponse,
-			wantMetrics:     nil,
-		},
-
-		"sysfs: multiple sensors": {
-			prepareSysfsMock: prepareMockSysfsScannerOk,
-			wantCharts:       20,
-			wantMetrics: map[string]int64{
-				"sensor_chip_acpitz-acpi-0_feature_temp1_subfeature_temp1_input":                        88000,
-				"sensor_chip_amdgpu-pci-0300_feature_edge_subfeature_temp1_input":                       53000,
-				"sensor_chip_amdgpu-pci-0300_feature_fan1_subfeature_fan1_input":                        0,
-				"sensor_chip_amdgpu-pci-0300_feature_junction_subfeature_temp2_input":                   58000,
-				"sensor_chip_amdgpu-pci-0300_feature_mem_subfeature_temp3_input":                        57000,
-				"sensor_chip_amdgpu-pci-0300_feature_ppt_subfeature_power1_average":                     29000,
-				"sensor_chip_amdgpu-pci-0300_feature_vddgfx_subfeature_in0_input":                       787,
-				"sensor_chip_amdgpu-pci-6700_feature_edge_subfeature_temp1_input":                       60000,
-				"sensor_chip_amdgpu-pci-6700_feature_ppt_subfeature_power1_average":                     5088,
-				"sensor_chip_amdgpu-pci-6700_feature_vddgfx_subfeature_in0_input":                       1335,
-				"sensor_chip_amdgpu-pci-6700_feature_vddnb_subfeature_in1_input":                        973,
-				"sensor_chip_asus-isa-0000_feature_cpu_fan_subfeature_fan1_input":                       5700000,
-				"sensor_chip_asus-isa-0000_feature_gpu_fan_subfeature_fan2_input":                       6600000,
-				"sensor_chip_bat0-acpi-0_feature_in0_subfeature_in0_input":                              17365,
-				"sensor_chip_k10temp-pci-00c3_feature_tctl_subfeature_temp1_input":                      90000,
-				"sensor_chip_nvme-pci-0600_feature_composite_subfeature_temp1_input":                    33850,
-				"sensor_chip_nvme-pci-0600_feature_sensor_1_subfeature_temp2_input":                     48850,
-				"sensor_chip_nvme-pci-0600_feature_sensor_2_subfeature_temp3_input":                     33850,
-				"sensor_chip_ucsi_source_psy_usbc000:001-isa-0000_feature_curr1_subfeature_curr1_input": 0,
-				"sensor_chip_ucsi_source_psy_usbc000:001-isa-0000_feature_in0_subfeature_in0_input":     0,
-			},
-		},
-		"sysfs: error on scan": {
-			prepareSysfsMock: prepareMockSysfsScannerErr,
-			wantMetrics:      nil,
+		"error on scan": {
+			prepareScanner: prepareMockScannerErr,
+			wantMetrics:    nil,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			sensors := New()
-			if test.prepareExecMock != nil {
-				sensors.exec = test.prepareExecMock()
-			} else if test.prepareSysfsMock != nil {
-				sensors.sc = test.prepareSysfsMock()
-			} else {
-				t.Fail()
-			}
+			sensors.sc = test.prepareScanner()
 
 			var mx map[string]int64
+
 			for i := 0; i < 10; i++ {
 				mx = sensors.Collect()
 			}
@@ -289,202 +282,214 @@ func TestSensors_Collect(t *testing.T) {
 	}
 }
 
-func prepareMockExecOkOnlyTemp() *mockSensorsBinary {
-	return &mockSensorsBinary{
-		sensorsInfoData: dataSensorsTemp,
+func prepareMockScannerOk() *mockScanner {
+	return &mockScanner{
+		scanData: mockChips(),
 	}
 }
 
-func prepareMockExecOkTempInCurrPowerFan() *mockSensorsBinary {
-	return &mockSensorsBinary{
-		sensorsInfoData: dataSensorsTempInCurrPowerFan,
-	}
-}
-
-func prepareMockExecErr() *mockSensorsBinary {
-	return &mockSensorsBinary{
-		errOnSensorsInfo: true,
-	}
-}
-
-func prepareMockExecUnexpectedResponse() *mockSensorsBinary {
-	return &mockSensorsBinary{
-		sensorsInfoData: []byte(`
-Lorem ipsum dolor sit amet, consectetur adipiscing elit.
-Nulla malesuada erat id magna mattis, eu viverra tellus rhoncus.
-Fusce et felis pulvinar, posuere sem non, porttitor eros.
-`),
-	}
-}
-
-func prepareMockExecEmptyResponse() *mockSensorsBinary {
-	return &mockSensorsBinary{}
-}
-
-type mockSensorsBinary struct {
-	errOnSensorsInfo bool
-	sensorsInfoData  []byte
-}
-
-func (m *mockSensorsBinary) sensorsInfo() ([]byte, error) {
-	if m.errOnSensorsInfo {
-		return nil, errors.New("mock.sensorsInfo() error")
-	}
-
-	return m.sensorsInfoData, nil
-}
-
-func prepareMockSysfsScannerOk() *mockSysfsScanner {
-	return &mockSysfsScanner{
-		scanData: []*lmsensors.Device{
-			{Name: "asus-isa-0000", Sensors: []lmsensors.Sensor{
-				&lmsensors.FanSensor{
-					Name:  "fan1",
-					Label: "cpu_fan",
-					Input: 5700,
-				},
-				&lmsensors.FanSensor{
-					Name:  "fan2",
-					Label: "gpu_fan",
-					Input: 6600,
-				},
-			}},
-			{Name: "nvme-pci-0600", Sensors: []lmsensors.Sensor{
-				&lmsensors.TemperatureSensor{
-					Name:     "temp1",
-					Label:    "Composite",
-					Input:    33.85,
-					Maximum:  83.85,
-					Minimum:  -40.15,
-					Critical: 87.85,
-					Alarm:    false,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:    "temp2",
-					Label:   "Sensor 1",
-					Input:   48.85,
-					Maximum: 65261.85,
-					Minimum: -273.15,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:    "temp3",
-					Label:   "Sensor 2",
-					Input:   33.85,
-					Maximum: 65261.85,
-					Minimum: -273.15,
-				},
-			}},
-			{Name: "amdgpu-pci-6700", Sensors: []lmsensors.Sensor{
-				&lmsensors.VoltageSensor{
-					Name:  "in0",
-					Label: "vddgfx",
-					Input: 1.335,
-				},
-				&lmsensors.VoltageSensor{
-					Name:  "in1",
-					Label: "vddnb",
-					Input: 0.973,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:  "temp1",
-					Label: "edge",
-					Input: 60.000,
-				},
-				&lmsensors.PowerSensor{
-					Name:    "power1",
-					Label:   "PPT",
-					Average: 5.088,
-				},
-			}},
-			{Name: "BAT0-acpi-0", Sensors: []lmsensors.Sensor{
-				&lmsensors.VoltageSensor{
-					Name:  "in0",
-					Label: "in0",
-					Input: 17.365,
-				},
-			}},
-			{Name: "ucsi_source_psy_USBC000:001-isa-0000", Sensors: []lmsensors.Sensor{
-				&lmsensors.VoltageSensor{
-					Name:  "in0",
-					Label: "in0",
-					Input: 0.000,
-				},
-				&lmsensors.CurrentSensor{
-					Name:  "curr1",
-					Label: "curr1",
-					Input: 0.000,
-				},
-			}},
-			{Name: "k10temp-pci-00c3", Sensors: []lmsensors.Sensor{
-				&lmsensors.TemperatureSensor{
-					Name:  "temp1",
-					Label: "Tctl",
-					Input: 90,
-				},
-			}},
-			{Name: "amdgpu-pci-0300", Sensors: []lmsensors.Sensor{
-				&lmsensors.VoltageSensor{
-					Name:  "in0",
-					Label: "vddgfx",
-					Input: 0.787,
-				},
-				&lmsensors.FanSensor{
-					Name:    "fan1",
-					Label:   "fan1",
-					Maximum: 4900,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:      "temp1",
-					Label:     "edge",
-					Input:     53,
-					Critical:  100,
-					Emergency: 105,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:      "temp2",
-					Label:     "junction",
-					Input:     58,
-					Critical:  100,
-					Emergency: 105,
-				},
-				&lmsensors.TemperatureSensor{
-					Name:      "temp3",
-					Label:     "mem",
-					Input:     57,
-					Critical:  106,
-					Emergency: 110,
-				},
-				&lmsensors.PowerSensor{
-					Name:    "power1",
-					Label:   "PPT",
-					Average: 29,
-				},
-			}},
-			{Name: "acpitz-acpi-0", Sensors: []lmsensors.Sensor{
-				&lmsensors.FanSensor{
-					Name:  "temp1",
-					Label: "temp1",
-					Input: 88,
-				},
-			}},
-		},
-	}
-}
-
-func prepareMockSysfsScannerErr() *mockSysfsScanner {
-	return &mockSysfsScanner{
+func prepareMockScannerErr() *mockScanner {
+	return &mockScanner{
 		errOnScan: true,
 	}
 }
 
-type mockSysfsScanner struct {
+type mockScanner struct {
 	errOnScan bool
-	scanData  []*lmsensors.Device
+	scanData  []*lmsensors.Chip
 }
 
-func (m *mockSysfsScanner) Scan() ([]*lmsensors.Device, error) {
+func (m *mockScanner) Scan() ([]*lmsensors.Chip, error) {
 	if m.errOnScan {
 		return nil, errors.New("mock.scan() error")
 	}
 	return m.scanData, nil
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func mockChips() []*lmsensors.Chip {
+	return []*lmsensors.Chip{
+		{
+			Name:       "chip0",
+			UniqueName: "chip0-pci-xxxxxxxx",
+			SysDevice:  "pci0000:80/0000:80:01.4/0000:81:00.0/nvme/nvme0",
+			Sensors: lmsensors.Sensors{
+				Voltage: []*lmsensors.VoltageSensor{
+					{
+						Name:    "in1",
+						Label:   "some_label1",
+						Alarm:   ptr(false),
+						Input:   ptr(42.0),
+						Average: ptr(42.0),
+						Min:     ptr(42.0),
+						Max:     ptr(42.0),
+						CritMin: ptr(42.0),
+						CritMax: ptr(42.0),
+						Lowest:  ptr(42.0),
+						Highest: ptr(42.0),
+					},
+					{
+						Name:    "in2",
+						Label:   "some_label2",
+						Input:   ptr(42.0),
+						Min:     ptr(42.0),
+						Max:     ptr(42.0),
+						CritMin: ptr(42.0),
+						CritMax: ptr(42.0),
+						Lowest:  ptr(42.0),
+						Highest: ptr(42.0),
+					},
+				},
+				Fan: []*lmsensors.FanSensor{
+					{
+						Name:   "fan1",
+						Label:  "some_label1",
+						Alarm:  ptr(false),
+						Input:  ptr(42.0),
+						Min:    ptr(42.0),
+						Max:    ptr(42.0),
+						Target: ptr(42.0),
+					},
+					{
+						Name:   "fan2",
+						Label:  "some_label2",
+						Input:  ptr(42.0),
+						Min:    ptr(42.0),
+						Max:    ptr(42.0),
+						Target: ptr(42.0),
+					},
+				},
+				Temperature: []*lmsensors.TemperatureSensor{
+					{
+						Name:        "temp1",
+						Label:       "some_label1",
+						Alarm:       ptr(false),
+						TempTypeRaw: 1,
+						Input:       ptr(42.0),
+						Max:         ptr(42.0),
+						Min:         ptr(42.0),
+						CritMin:     ptr(42.0),
+						CritMax:     ptr(42.0),
+						Emergency:   ptr(42.0),
+						Lowest:      ptr(42.0),
+						Highest:     ptr(42.0),
+					},
+					{
+						Name:        "temp2",
+						Label:       "some_label2",
+						TempTypeRaw: 1,
+						Input:       ptr(42.0),
+						Max:         ptr(42.0),
+						Min:         ptr(42.0),
+						CritMin:     ptr(42.0),
+						CritMax:     ptr(42.0),
+						Emergency:   ptr(42.0),
+						Lowest:      ptr(42.0),
+						Highest:     ptr(42.0),
+					},
+				},
+				Current: []*lmsensors.CurrentSensor{
+					{
+						Name:    "curr1",
+						Label:   "some_label1",
+						Alarm:   ptr(false),
+						Max:     ptr(42.0),
+						Min:     ptr(42.0),
+						CritMin: ptr(42.0),
+						CritMax: ptr(42.0),
+						Input:   ptr(42.0),
+						Average: ptr(42.0),
+						Lowest:  ptr(42.0),
+						Highest: ptr(42.0),
+					},
+					{
+						Name:    "curr2",
+						Label:   "some_label2",
+						Max:     ptr(42.0),
+						Min:     ptr(42.0),
+						CritMin: ptr(42.0),
+						CritMax: ptr(42.0),
+						Input:   ptr(42.0),
+						Lowest:  ptr(42.0),
+						Highest: ptr(42.0),
+					},
+				},
+				Power: []*lmsensors.PowerSensor{
+					{
+						Name:           "power1",
+						Label:          "some_label1",
+						Alarm:          ptr(false),
+						Average:        ptr(345.0),
+						AverageHighest: ptr(345.0),
+						AverageLowest:  ptr(345.0),
+						AverageMax:     ptr(345.0),
+						AverageMin:     ptr(345.0),
+						Input:          ptr(345.0),
+						InputHighest:   ptr(345.0),
+						InputLowest:    ptr(345.0),
+						Accuracy:       ptr(34.5),
+						Cap:            ptr(345.0),
+						CapMax:         ptr(345.0),
+						CapMin:         ptr(345.0),
+						Max:            ptr(345.0),
+						CritMax:        ptr(345.0),
+					},
+					{
+						Name:           "power2",
+						Label:          "some_label2",
+						AverageHighest: ptr(345.0),
+						AverageLowest:  ptr(345.0),
+						AverageMax:     ptr(345.0),
+						AverageMin:     ptr(345.0),
+						Input:          ptr(345.0),
+						InputHighest:   ptr(345.0),
+						InputLowest:    ptr(345.0),
+						Accuracy:       ptr(34.5),
+						Cap:            ptr(345.0),
+						CapMax:         ptr(345.0),
+						CapMin:         ptr(345.0),
+						Max:            ptr(345.0),
+						CritMax:        ptr(345.0),
+					},
+				},
+				Energy: []*lmsensors.EnergySensor{
+					{
+						Name:  "energy1",
+						Label: "some_label1",
+						Input: ptr(42.0),
+					},
+					{
+						Name:  "energy2",
+						Label: "some_label2",
+						Input: ptr(42.0),
+					},
+				},
+				Humidity: []*lmsensors.HumiditySensor{
+					{
+						Name:  "humidity1",
+						Label: "some_label1",
+						Input: ptr(42.0),
+					},
+					{
+						Name:  "humidity2",
+						Label: "some_label2",
+						Input: ptr(42.0),
+					},
+				},
+				Intrusion: []*lmsensors.IntrusionSensor{
+					{
+						Name:  "intrusion1",
+						Label: "some_label1",
+						Alarm: ptr(false),
+					},
+					{
+						Name:  "intrusion2",
+						Label: "some_label2",
+						Alarm: ptr(true),
+					},
+				},
+			},
+		},
+	}
 }

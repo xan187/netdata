@@ -10,6 +10,11 @@
 #include "database/rrd.h"
 #include "stream_capabilities.h"
 
+// When a child disconnects this is the maximum we will wait
+// before we update the cloud that the child is offline
+#define MAX_CHILD_DISC_DELAY (30000)
+#define MAX_CHILD_DISC_TOLERANCE (125 / 100)
+
 #define CONNECTED_TO_SIZE 100
 #define CBUFFER_INITIAL_SIZE (16 * 1024)
 #define THREAD_BUFFER_INITIAL_SIZE (CBUFFER_INITIAL_SIZE / 2)
@@ -297,12 +302,12 @@ struct receiver_state {
         time_t alarms_delay;
         uint32_t alarms_history;
         int rrdpush_enabled;
-        char *rrdpush_api_key; // DONT FREE - it is allocated in appconfig
-        char *rrdpush_send_charts_matching; // DONT FREE - it is allocated in appconfig
+        const char *rrdpush_api_key; // DONT FREE - it is allocated in appconfig
+        const char *rrdpush_send_charts_matching; // DONT FREE - it is allocated in appconfig
         bool rrdpush_enable_replication;
         time_t rrdpush_seconds_to_replicate;
         time_t rrdpush_replication_step;
-        char *rrdpush_destination;  // DONT FREE - it is allocated in appconfig
+        const char *rrdpush_destination;  // DONT FREE - it is allocated in appconfig
         unsigned int rrdpush_compression;
         STREAM_CAPABILITIES compression_priorities[COMPRESSION_ALGORITHM_MAX];
     } config;
@@ -349,9 +354,9 @@ struct rrdpush_destinations {
 
 extern unsigned int default_rrdpush_enabled;
 extern unsigned int default_rrdpush_compression_enabled;
-extern char *default_rrdpush_destination;
-extern char *default_rrdpush_api_key;
-extern char *default_rrdpush_send_charts_matching;
+extern const char *default_rrdpush_destination;
+extern const char *default_rrdpush_api_key;
+extern const char *default_rrdpush_send_charts_matching;
 extern bool default_rrdpush_enable_replication;
 extern time_t default_rrdpush_seconds_to_replicate;
 extern time_t default_rrdpush_replication_step;

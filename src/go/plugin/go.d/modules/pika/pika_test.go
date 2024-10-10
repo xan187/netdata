@@ -11,7 +11,7 @@ import (
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/tlscfg"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -187,11 +187,11 @@ func TestPika_Collect(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			pika := test.prepare(t)
 
-			ms := pika.Collect()
+			mx := pika.Collect()
 
-			assert.Equal(t, test.wantCollected, ms)
+			assert.Equal(t, test.wantCollected, mx)
 			if len(test.wantCollected) > 0 {
-				ensureCollectedHasAllChartsDimsVarsIDs(t, pika, ms)
+				module.TestMetricsHasAllChartsDims(t, pika.Charts(), mx)
 				ensureCollectedCommandsAddedToCharts(t, pika)
 				ensureCollectedDbsAddedToCharts(t, pika)
 			}
@@ -224,22 +224,6 @@ func preparePikaWithRedisMetrics(t *testing.T) *Pika {
 		result: dataRedisInfoAll,
 	}
 	return pika
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, pika *Pika, ms map[string]int64) {
-	for _, chart := range *pika.Charts() {
-		if chart.Obsolete {
-			continue
-		}
-		for _, dim := range chart.Dims {
-			_, ok := ms[dim.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := ms[v.ID]
-			assert.Truef(t, ok, "chart '%s' dim '%s': no dim in collected", v.ID, chart.ID)
-		}
-	}
 }
 
 func ensureCollectedCommandsAddedToCharts(t *testing.T, pika *Pika) {

@@ -556,7 +556,7 @@ static int handle_http_request(https_req_ctx_t *ctx) {
         // we remove those but during encoding we need that space in the buffer
         creds_base64_len += (1+(creds_base64_len/64)) * strlen("\n");
         char *creds_base64 = callocz(1, creds_base64_len + 1);
-        base64_encode_helper((unsigned char*)creds_base64, &creds_base64_len, (unsigned char*)creds_plain, creds_plain_len);
+        (void) netdata_base64_encode((unsigned char *)creds_base64, (unsigned char *)creds_plain, creds_plain_len);
         buffer_sprintf(hdr, "Proxy-Authorization: Basic %s\x0D\x0A", creds_base64);
         freez(creds_plain);
     }
@@ -584,7 +584,6 @@ static int handle_http_request(https_req_ctx_t *ctx) {
         if (ctx->parse_ctx.chunked_response)
             freez(ctx->parse_ctx.chunked_response);
         rc = 4;
-        goto err_exit;
     }
 
 err_exit:
@@ -621,13 +620,14 @@ static int cert_verify_callback(int preverify_ok, X509_STORE_CTX *ctx)
     return preverify_ok;
 }
 
-int https_request(https_req_t *request, https_req_response_t *response) {
+int https_request(https_req_t *request, https_req_response_t *response, bool *fallback_ipv4)
+{
     int rc = 1, ret;
     char connect_port_str[PORT_STR_MAX_BYTES];
 
     const char *connect_host = request->proxy_host ? request->proxy_host : request->host;
     int connect_port = request->proxy_host ? request->proxy_port : request->port;
-    struct timeval timeout = { .tv_sec = request->timeout_s, .tv_usec = 0 };
+    struct timeval timeout = { .tv_sec = 10, .tv_usec = 0 };
 
     https_req_ctx_t *ctx = callocz(1, sizeof(https_req_ctx_t));
     ctx->req_start_time = now_realtime_sec();
@@ -640,7 +640,7 @@ int https_request(https_req_t *request, https_req_response_t *response) {
 
     snprintfz(connect_port_str, PORT_STR_MAX_BYTES, "%d", connect_port);
 
-    ctx->sock = connect_to_this_ip46(IPPROTO_TCP, SOCK_STREAM, connect_host, 0, connect_port_str, &timeout);
+    ctx->sock = connect_to_this_ip46(IPPROTO_TCP, SOCK_STREAM, connect_host, 0, connect_port_str, &timeout, fallback_ipv4);
     if (ctx->sock < 0) {
         netdata_log_error("Error connecting TCP socket to \"%s\"", connect_host);
         goto exit_buf_rx;

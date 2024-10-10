@@ -7,6 +7,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "timestamps.h"
 #include "setproctitle.h"
 #include "close_range.h"
 #include "setresuid.h"
@@ -22,6 +23,7 @@
 #include "os-freebsd-wrappers.h"
 #include "os-macos-wrappers.h"
 #include "os-windows-wrappers.h"
+#include "windows-perflib/perflib.h"
 
 // =====================================================================================================================
 // common defs for Apple/FreeBSD/Linux

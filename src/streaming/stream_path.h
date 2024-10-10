@@ -22,6 +22,8 @@ typedef struct stream_path {
     int16_t hops;                   // -1 = stale node, 0 = localhost, >0 the hops count
     STREAM_PATH_FLAGS flags;        // ACLK or NONE for the moment
     STREAM_CAPABILITIES capabilities; // streaming connection capabilities
+    uint32_t start_time;            // median time in ms the agent needs to start
+    uint32_t shutdown_time;         // median time in ms the agent needs to shutdown
 } STREAM_PATH;
 
 typedef struct rrdhost_stream_path {
@@ -45,6 +47,7 @@ void stream_path_node_id_updated(struct rrdhost *host);
 
 void stream_path_child_disconnected(struct rrdhost *host);
 void stream_path_parent_disconnected(struct rrdhost *host);
+STREAM_PATH rrdhost_stream_path_fetch(struct rrdhost *host);
 
 bool stream_path_set_from_json(struct rrdhost *host, const char *json, bool from_parent);
 

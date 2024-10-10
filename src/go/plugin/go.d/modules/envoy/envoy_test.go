@@ -3,12 +3,12 @@
 package envoy
 
 import (
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
 
 	"github.com/stretchr/testify/assert"
@@ -50,8 +50,8 @@ func TestEnvoy_Init(t *testing.T) {
 		"fail when URL not set": {
 			wantFail: true,
 			config: Config{
-				HTTP: web.HTTP{
-					Request: web.Request{URL: ""},
+				HTTPConfig: web.HTTPConfig{
+					RequestConfig: web.RequestConfig{URL: ""},
 				},
 			},
 		},
@@ -504,21 +504,8 @@ func TestEnvoy_Collect(t *testing.T) {
 			mx := envoy.Collect()
 
 			require.Equal(t, test.wantMetrics, mx)
-			ensureCollectedHasAllChartsDimsVarsIDs(t, envoy, mx)
+			module.TestMetricsHasAllChartsDims(t, envoy.Charts(), mx)
 		})
-	}
-}
-
-func ensureCollectedHasAllChartsDimsVarsIDs(t *testing.T, envoy *Envoy, mx map[string]int64) {
-	for _, chart := range *envoy.Charts() {
-		for _, dim := range chart.Dims {
-			_, ok := mx[dim.ID]
-			assert.Truef(t, ok, "collected metrics has no data for dim '%s' chart '%s'", dim.ID, chart.ID)
-		}
-		for _, v := range chart.Vars {
-			_, ok := mx[v.ID]
-			assert.Truef(t, ok, "collected metrics has no data for var '%s' chart '%s'", v.ID, chart.ID)
-		}
 	}
 }
 

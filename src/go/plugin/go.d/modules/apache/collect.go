@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"net/http"
 	"strconv"
 	"strings"
 
@@ -31,22 +30,24 @@ func (a *Apache) collect() (map[string]int64, error) {
 }
 
 func (a *Apache) scrapeStatus() (*serverStatus, error) {
-	req, err := web.NewHTTPRequest(a.Request)
+	req, err := web.NewHTTPRequest(a.RequestConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := a.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("error on HTTP request '%s': %v", req.URL, err)
-	}
-	defer closeBody(resp)
+	var stats *serverStatus
+	var perr error
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("'%s' returned HTTP status code: %d", req.URL, resp.StatusCode)
+	if err := web.DoHTTP(a.httpClient).Request(req, func(body io.Reader) error {
+		if stats, perr = parseResponse(body); perr != nil {
+			return perr
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
 
-	return parseResponse(resp.Body)
+	return stats, nil
 }
 
 func parseResponse(r io.Reader) (*serverStatus, error) {
@@ -153,11 +154,4 @@ func parseFloat(value string) *float64 {
 		return nil
 	}
 	return &v
-}
-
-func closeBody(resp *http.Response) {
-	if resp != nil && resp.Body != nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		_ = resp.Body.Close()
-	}
 }

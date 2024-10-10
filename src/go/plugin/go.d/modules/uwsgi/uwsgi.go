@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/netdata/netdata/go/plugins/plugin/go.d/agent/module"
-	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/web"
+	"github.com/netdata/netdata/go/plugins/plugin/go.d/pkg/confopt"
 )
 
 //go:embed "config_schema.json"
@@ -26,18 +26,17 @@ func New() *Uwsgi {
 	return &Uwsgi{
 		Config: Config{
 			Address: "127.0.0.1:1717",
-			Timeout: web.Duration(time.Second * 1),
+			Timeout: confopt.Duration(time.Second * 1),
 		},
-		newConn:     newUwsgiConn,
 		charts:      charts.Copy(),
 		seenWorkers: make(map[int]bool),
 	}
 }
 
 type Config struct {
-	UpdateEvery int          `yaml:"update_every,omitempty" json:"update_every"`
-	Address     string       `yaml:"address" json:"address"`
-	Timeout     web.Duration `yaml:"timeout" json:"timeout"`
+	UpdateEvery int              `yaml:"update_every,omitempty" json:"update_every"`
+	Address     string           `yaml:"address" json:"address"`
+	Timeout     confopt.Duration `yaml:"timeout" json:"timeout"`
 }
 
 type Uwsgi struct {
@@ -46,7 +45,7 @@ type Uwsgi struct {
 
 	charts *module.Charts
 
-	newConn func(Config) uwsgiConn
+	conn uwsgiConn
 
 	seenWorkers map[int]bool
 }
@@ -60,6 +59,8 @@ func (u *Uwsgi) Init() error {
 		u.Error("config: 'address' not set")
 		return errors.New("address not set")
 	}
+
+	u.conn = newUwsgiConn(u.Config)
 
 	return nil
 }
